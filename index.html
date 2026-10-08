@@ -52,7 +52,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <div class="full"><label>邮箱</label><input id="authEmail" type="email" placeholder="name@example.com"></div>
 <div class="full"><label>密码</label><input id="authPassword" type="password" placeholder="至少 6 位"></div>
 </div>
-<div class="actions"><button class="btn secondary" id="signupBtn">创建账号</button><button class="btn" id="loginBtn">登录</button></div>
+<div class="actions"><button class="btn secondary" id="resendBtn">重新发送确认邮件</button><button class="btn secondary" id="signupBtn">创建账号</button><button class="btn" id="loginBtn">登录</button></div>
 <div class="status" id="authMsg" style="margin-top:12px"></div>
 </div></div>
 
@@ -88,6 +88,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <script>
 const SUPABASE_URL="https://otaokoencpoanxjjuqzv.supabase.co";
 const SUPABASE_KEY="sb_publishable_hA9UHbP834axMbvdRRbwyA_4dUTU2-B";
+const APP_URL="https://zhengjialai7-a11y.github.io/ancient-stove-reference/";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
 let categories=[],refs=[],user=null,activeCategory="全部参考",editingId=null;
@@ -175,7 +176,8 @@ async function refreshAuth(){
 }
 $("#authBtn").onclick=async()=>{if(user){await db.auth.signOut();await refreshAuth()}else openModal("authModal")};
 $("#loginBtn").onclick=async()=>{const email=$("#authEmail").value.trim(),password=$("#authPassword").value;const {error}=await db.auth.signInWithPassword({email,password});$("#authMsg").textContent=error?error.message:"登录成功";if(!error){closeModal("authModal");await refreshAuth()}};
-$("#signupBtn").onclick=async()=>{const email=$("#authEmail").value.trim(),password=$("#authPassword").value;const {data,error}=await db.auth.signUp({email,password});$("#authMsg").textContent=error?error.message:(data.session?"账号已创建并登录":"账号已创建，请检查邮箱完成验证后再登录")};
+$("#signupBtn").onclick=async()=>{const email=$("#authEmail").value.trim(),password=$("#authPassword").value;const {data,error}=await db.auth.signUp({email,password,options:{emailRedirectTo:APP_URL}});$("#authMsg").textContent=error?error.message:(data.session?"账号已创建并登录":"账号已创建，请检查邮箱完成验证后再登录")};
+$("#resendBtn").onclick=async()=>{const email=$("#authEmail").value.trim();if(!email){$("#authMsg").textContent="请先填写邮箱";return}const {error}=await db.auth.resend({type:"signup",email,options:{emailRedirectTo:APP_URL}});$("#authMsg").textContent=error?error.message:"确认邮件已重新发送，请使用最新一封邮件里的链接"};
 $("#addCategoryBtn").onclick=()=>openModal("categoryModal");
 $("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
 $("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
