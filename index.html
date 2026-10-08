@@ -1,235 +1,192 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>美术绘制参考</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
 <style>
-:root{
-  --bg:#f4f1ea;--panel:#fffdf8;--ink:#24231f;--muted:#777268;--line:#ded8cc;
-  --accent:#6f4c2f;--accent2:#8f6a47;--chip:#ece4d7;--sidebar:#ebe5d9;--danger:#a4483f
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-button,input,select,textarea{font:inherit}
+:root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#24231f;--muted:#777268;--line:#ded8cc;--accent:#6f4c2f;--chip:#ece4d7;--sidebar:#ebe5d9;--danger:#a4483f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+button,input,select,textarea{font:inherit}button{cursor:pointer}
 header{position:sticky;top:0;z-index:20;background:rgba(244,241,234,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
-.wrap{max-width:1600px;margin:auto;padding:16px 22px}
-.top{display:flex;gap:18px;align-items:end;justify-content:space-between;flex-wrap:wrap}
+.wrap{max-width:1600px;margin:auto;padding:16px 22px}.top{display:flex;gap:16px;align-items:end;justify-content:space-between;flex-wrap:wrap}
 h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.toolbar input,.toolbar select{height:38px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:0 11px;color:var(--ink)}
-.btn{border:0;border-radius:10px;padding:10px 14px;cursor:pointer;background:var(--accent);color:#fff}
-.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}
-.btn.danger{background:var(--danger)}
-.layout{max-width:1600px;margin:auto;display:grid;grid-template-columns:240px 1fr;gap:18px;padding:20px 22px 60px}
-.sidebar{background:var(--sidebar);border:1px solid var(--line);border-radius:14px;padding:12px;height:fit-content;position:sticky;top:96px}
-.side-title{font-size:12px;color:var(--muted);padding:4px 8px 10px}
-.cat{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;padding:10px 10px;border-radius:9px;cursor:pointer;text-align:left;color:var(--ink)}
-.cat:hover,.cat.active{background:#fff}.cat .count{font-size:12px;color:var(--muted)}
-.sidebar .addcat{width:100%;margin-top:8px}
-.main{min-width:0}
-.notice{background:#fff8e8;border:1px solid #ead7a8;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:14px}
-.section-head{display:flex;justify-content:space-between;align-items:center;margin:0 0 12px;gap:12px}
-.section-head h2{font-size:20px;margin:0}.stats{font-size:13px;color:var(--muted)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:16px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;cursor:pointer;transition:.18s;box-shadow:0 2px 10px rgba(0,0,0,.025);position:relative}
-.card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08)}
-.thumb{height:210px;overflow:hidden;background:#ddd;position:relative}.thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:.2s}
-.badge{position:absolute;top:10px;left:10px;background:rgba(30,27,22,.78);color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
-.custombadge{position:absolute;top:10px;right:10px;background:rgba(111,76,47,.9);color:#fff;padding:4px 8px;border-radius:999px;font-size:11px}
-.meta{padding:13px}.meta h3{font-size:15px;line-height:1.4;margin:0 0 8px}.line{font-size:12px;color:var(--muted);line-height:1.55}
-.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.chip{font-size:11px;background:var(--chip);padding:4px 7px;border-radius:999px}
-.empty{text-align:center;padding:80px 24px;color:var(--muted);border:1px dashed var(--line);border-radius:14px;background:rgba(255,255,255,.35)}
-.modal{position:fixed;inset:0;background:rgba(20,18,15,.78);z-index:100;display:none;align-items:center;justify-content:center;padding:24px}
-.modal.show{display:flex}
-.modalbox{width:min(1180px,96vw);max-height:92vh;background:var(--panel);border-radius:16px;overflow:hidden;position:relative}
-.detailbox{height:min(760px,92vh);display:grid;grid-template-columns:1.65fr 1fr}
-.viewer{background:#201f1c;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}.viewer img{max-width:100%;max-height:100%;object-fit:contain}
-.detail{padding:24px;overflow:auto}.detail h2{font-size:22px;margin:0 0 12px}.detail dl{margin:0}.detail dt{color:var(--muted);font-size:12px;margin-top:14px}.detail dd{margin:4px 0 0;font-size:14px;line-height:1.6}
-a.linkbtn{display:inline-block;margin-top:18px;padding:10px 14px;background:var(--accent);color:white;text-decoration:none;border-radius:10px}
-.close{position:absolute;right:15px;top:12px;border:0;background:#fff;border-radius:50%;width:36px;height:36px;font-size:22px;cursor:pointer;z-index:3}
-.formbox{width:min(650px,96vw);padding:24px;overflow:auto;max-height:90vh}
-.formbox h2{margin:0 0 16px}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.formgrid .full{grid-column:1/-1}
-label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px}
-.formbox input,.formbox select,.formbox textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px}
-.formbox textarea{min-height:90px;resize:vertical}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
-.smallnote{font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px}
-@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{position:static}.detailbox{grid-template-columns:1fr;height:94vh}.viewer{min-height:52vh}.detail{max-height:42vh}.thumb{height:180px}}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.toolbar input,.toolbar select{height:38px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:0 11px}
+.btn{border:0;border-radius:10px;padding:10px 14px;background:var(--accent);color:#fff}.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}.btn.danger{background:var(--danger)}
+.layout{max-width:1600px;margin:auto;display:grid;grid-template-columns:240px 1fr;gap:18px;padding:20px 22px 60px}.sidebar{background:var(--sidebar);border:1px solid var(--line);border-radius:14px;padding:12px;height:fit-content;position:sticky;top:96px}
+.side-title{font-size:12px;color:var(--muted);padding:4px 8px 10px}.cat{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;padding:10px;border-radius:9px;text-align:left}.cat:hover,.cat.active{background:#fff}.count{font-size:12px;color:var(--muted)}
+.main{min-width:0}.notice{background:#eef7ee;border:1px solid #bdd8bd;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:14px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.section-head h2{font-size:20px;margin:0}.stats,.status{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:.18s;box-shadow:0 2px 10px rgba(0,0,0,.025)}.card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.thumb{height:210px;overflow:hidden;background:#ddd;position:relative}.thumb img{width:100%;height:100%;object-fit:cover;display:block}.badge{position:absolute;top:10px;left:10px;background:rgba(30,27,22,.78);color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
+.meta{padding:13px}.meta h3{font-size:15px;line-height:1.4;margin:0 0 8px}.line{font-size:12px;color:var(--muted);line-height:1.55}.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}.chip{font-size:11px;background:var(--chip);padding:4px 7px;border-radius:999px}
+.card-actions{display:flex;gap:6px;margin-top:10px}.mini{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 8px;font-size:12px}.empty{text-align:center;padding:80px;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
+.modal{position:fixed;inset:0;background:rgba(20,18,15,.78);z-index:100;display:none;align-items:center;justify-content:center;padding:24px}.modal.show{display:flex}.modalbox{width:min(700px,96vw);max-height:92vh;background:var(--panel);border-radius:16px;overflow:auto;padding:24px;position:relative}.close{position:absolute;right:14px;top:12px;border:0;background:#fff;border-radius:50%;width:36px;height:36px;font-size:22px}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px}.modalbox input,.modalbox select,.modalbox textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px}.modalbox textarea{min-height:90px}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.preview{max-width:100%;max-height:420px;display:block;margin:auto}.syncdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#45a35a;margin-right:6px}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{position:static}.thumb{height:180px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}}
 </style>
 </head>
 <body>
-<header><div class="wrap">
-  <div class="top">
-    <div><h1>美术绘制参考</h1><div class="sub">按大类整理的绘制参考图库 · 可搜索、筛选并手动添加</div></div>
-    <div class="toolbar">
-      <input id="q" placeholder="搜索标题 / 标签 / 来源…"/>
-      <select id="era"><option value="">全部年代</option></select>
-      <select id="type"><option value="">全部类型</option></select>
-      <button class="btn secondary" id="addCategoryTop">＋ 新增大类</button>
-      <button class="btn" id="addItemTop">＋ 新增参考</button>
-    </div>
-  </div>
-</div></header>
+<header><div class="wrap"><div class="top">
+<div><h1>美术绘制参考</h1><div class="sub"><span class="syncdot"></span>云端共享图库 · 多设备实时同步</div></div>
+<div class="toolbar">
+<input id="q" placeholder="搜索标题 / 标签 / 来源…">
+<select id="era"><option value="">全部年代</option></select>
+<select id="type"><option value="">全部类型</option></select>
+<button class="btn secondary" id="authBtn">登录</button>
+<button class="btn secondary editorOnly" id="addCategoryBtn" style="display:none">＋ 新增大类</button>
+<button class="btn editorOnly" id="addItemBtn" style="display:none">＋ 新增参考</button>
+</div></div><div class="status" id="userStatus"></div></div></header>
 
 <div class="layout">
-  <aside class="sidebar">
-    <div class="side-title">参考大类</div>
-    <div id="categories"></div>
-    <button class="btn secondary addcat" id="addCategorySide">＋ 新增大类</button>
-  </aside>
+<aside class="sidebar"><div class="side-title">参考大类</div><div id="categories"></div></aside>
+<main class="main">
+<div class="notice">图库数据已改为云端共享：任意设备打开同一网址都会看到同一套分类与参考。登录后可新增、修改、删除；图片可直接上传。</div>
+<div class="section-head"><h2 id="currentTitle">全部参考</h2><div class="stats" id="stats"></div></div>
+<div class="grid" id="grid"></div>
+</main></div>
 
-  <main class="main">
-    <div class="notice">现有灶台资料已归入“灶台”。你新增的大类和参考会保存在当前浏览器中，刷新不会消失；由于网站目前是纯 GitHub Pages，手动新增内容暂不会自动同步到其他设备。</div>
-    <div class="section-head"><h2 id="currentTitle">全部参考</h2><div class="stats" id="stats"></div></div>
-    <div class="grid" id="grid"></div>
-  </main>
+<div class="modal" id="authModal"><div class="modalbox">
+<button class="close" data-close="authModal">×</button><h2>协作账号</h2>
+<div class="formgrid">
+<div class="full"><label>邮箱</label><input id="authEmail" type="email" placeholder="name@example.com"></div>
+<div class="full"><label>密码</label><input id="authPassword" type="password" placeholder="至少 6 位"></div>
 </div>
+<div class="actions"><button class="btn secondary" id="signupBtn">创建账号</button><button class="btn" id="loginBtn">登录</button></div>
+<div class="status" id="authMsg" style="margin-top:12px"></div>
+</div></div>
 
-<div class="modal" id="detailModal">
-  <div class="modalbox detailbox">
-    <div class="viewer"><button class="close" data-close="detailModal">×</button><img id="mimg"/></div>
-    <div class="detail">
-      <h2 id="mtitle"></h2>
-      <dl>
-        <dt>大类</dt><dd id="mcategory"></dd>
-        <dt>年代</dt><dd id="mera"></dd>
-        <dt>类型</dt><dd id="mtype"></dd>
-        <dt>馆藏 / 来源机构</dt><dd id="minst"></dd>
-        <dt>绘制重点</dt><dd id="mfocus"></dd>
-        <dt>参考说明</dt><dd id="mnote"></dd>
-      </dl>
-      <a class="linkbtn" id="mlink" target="_blank" rel="noopener">查看来源页 ↗</a>
-      <button class="btn danger" id="deleteCustom" style="display:none;margin-top:12px">删除这条自定义参考</button>
-    </div>
-  </div>
+<div class="modal" id="categoryModal"><div class="modalbox">
+<button class="close" data-close="categoryModal">×</button><h2>新增大类</h2>
+<label>大类名称</label><input id="newCategoryName" placeholder="例如：兵器、箱柜、交通工具">
+<div class="actions"><button class="btn" id="saveCategory">保存</button></div>
+</div></div>
+
+<div class="modal" id="itemModal"><div class="modalbox">
+<button class="close" data-close="itemModal">×</button><h2 id="itemModalTitle">新增参考</h2>
+<div class="formgrid">
+<div><label>标题 *</label><input id="fTitle"></div>
+<div><label>大类 *</label><select id="fCategory"></select></div>
+<div class="full"><label>上传图片</label><input id="fFile" type="file" accept="image/*"></div>
+<div class="full"><label>或填写图片地址</label><input id="fImage" placeholder="https://...jpg"></div>
+<div class="full"><label>来源页</label><input id="fSource"></div>
+<div><label>年代</label><input id="fEra" placeholder="北宋 / 明代 / 近现代"></div>
+<div><label>类型</label><input id="fType" placeholder="古画 / 实物 / 连环画"></div>
+<div class="full"><label>来源机构 / 作者</label><input id="fInstitution"></div>
+<div class="full"><label>绘制重点</label><input id="fFocus"></div>
+<div class="full"><label>标签</label><input id="fTags" placeholder="用逗号分隔"></div>
+<div class="full"><label>说明</label><textarea id="fNote"></textarea></div>
 </div>
+<div class="status" id="saveMsg"></div>
+<div class="actions"><button class="btn" id="saveItem">保存</button></div>
+</div></div>
 
-<div class="modal" id="categoryModal">
-  <div class="modalbox formbox">
-    <button class="close" data-close="categoryModal">×</button>
-    <h2>新增大类</h2>
-    <label>大类名称</label>
-    <input id="newCategoryName" placeholder="例如：兵器、箱柜、交通工具"/>
-    <div class="actions"><button class="btn secondary" data-close="categoryModal">取消</button><button class="btn" id="saveCategory">保存</button></div>
-  </div>
-</div>
+<div class="modal" id="viewModal"><div class="modalbox">
+<button class="close" data-close="viewModal">×</button><img id="viewImage" class="preview"><h2 id="viewTitle"></h2><div id="viewMeta" class="line"></div><p id="viewNote"></p><a id="viewSource" target="_blank" rel="noopener">查看来源页 ↗</a>
+</div></div>
 
-<div class="modal" id="itemModal">
-  <div class="modalbox formbox">
-    <button class="close" data-close="itemModal">×</button>
-    <h2>新增参考</h2>
-    <div class="formgrid">
-      <div><label>标题 *</label><input id="fTitle" placeholder="参考图名称"/></div>
-      <div><label>大类 *</label><select id="fCategory"></select></div>
-      <div class="full"><label>图片地址 *</label><input id="fImage" placeholder="https://...jpg / png"/></div>
-      <div class="full"><label>来源页</label><input id="fSource" placeholder="作品或资料原始链接"/></div>
-      <div><label>年代</label><input id="fEra" placeholder="例如：北宋 / 明代 / 近现代"/></div>
-      <div><label>类型</label><input id="fType" placeholder="例如：古画 / 实物 / 连环画"/></div>
-      <div class="full"><label>来源机构 / 作者</label><input id="fInstitution" placeholder="例如：故宫博物院 / 某连环画作品"/></div>
-      <div class="full"><label>标签</label><input id="fTags" placeholder="用逗号分隔，例如：木椅, 圈椅, 正视图"/></div>
-      <div class="full"><label>说明</label><textarea id="fNote" placeholder="适合观察的结构、材质、人物动作等"></textarea></div>
-    </div>
-    <div class="smallnote">提示：为了保持在线页面轻量，当前手动添加使用图片网址，不会把图片文件直接上传到 GitHub。</div>
-    <div class="actions"><button class="btn secondary" data-close="itemModal">取消</button><button class="btn" id="saveItem">保存参考</button></div>
-  </div>
-</div>
-
-<script src="data.js"></script>
 <script>
-const BASE_CATEGORIES=["灶台","椅子","床","桌子","灯具","门窗","建筑","器皿","服饰","人物动作","其他"];
-const STORAGE_CAT="artRef.customCategories.v1";
-const STORAGE_ITEMS="artRef.customItems.v1";
+const SUPABASE_URL="https://otaokoencpoanxjjuqzv.supabase.co";
+const SUPABASE_KEY="sb_publishable_hA9UHbP834axMbvdRRbwyA_4dUTU2-B";
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
-const grid=$("#grid"),q=$("#q"),era=$("#era"),type=$("#type");
-let activeCategory="全部参考",currentDetail=null;
+let categories=[],refs=[],user=null,activeCategory="全部参考",editingId=null;
 
-function loadJSON(key,fallback){try{return JSON.parse(localStorage.getItem(key)||"null")||fallback}catch(e){return fallback}}
-function saveJSON(key,val){localStorage.setItem(key,JSON.stringify(val))}
-function customCategories(){return loadJSON(STORAGE_CAT,[])}
-function customItems(){return loadJSON(STORAGE_ITEMS,[])}
-function allCategories(){return [...new Set([...BASE_CATEGORIES,...customCategories()])]}
-function baseItems(){return (window.REFERENCE_DATA||[]).map(x=>({...x,category:x.category||"灶台",custom:false}))}
-function allItems(){return [...baseItems(),...customItems().map(x=>({...x,custom:true}))]}
-
-function fillFilters(){
- const items=allItems();
- const oldEra=era.value,oldType=type.value;
- era.innerHTML='<option value="">全部年代</option>';type.innerHTML='<option value="">全部类型</option>';
- [...new Set(items.map(x=>x.era).filter(Boolean))].sort().forEach(v=>era.add(new Option(v,v)));
- [...new Set(items.map(x=>x.type).filter(Boolean))].sort().forEach(v=>type.add(new Option(v,v)));
- era.value=oldEra;type.value=oldType;
-}
-function renderCategories(){
- const items=allItems(),box=$("#categories");box.innerHTML="";
- const cats=["全部参考",...allCategories()];
- cats.forEach(c=>{
-   const count=c==="全部参考"?items.length:items.filter(x=>x.category===c).length;
-   const b=document.createElement("button");b.className="cat"+(c===activeCategory?" active":"");
-   b.innerHTML='<span>'+c+'</span><span class="count">'+count+'</span>';
-   b.onclick=()=>{activeCategory=c;renderCategories();render()};
-   box.appendChild(b);
- });
- const fc=$("#fCategory");const old=fc.value;fc.innerHTML="";
- allCategories().forEach(c=>fc.add(new Option(c,c)));if(allCategories().includes(old))fc.value=old;
-}
-function render(){
- const term=q.value.trim().toLowerCase(),ev=era.value,tv=type.value;
- const rows=allItems().filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
- $("#currentTitle").textContent=activeCategory;
- $("#stats").textContent='显示 '+rows.length+' / '+allItems().length+' 条参考';
- grid.innerHTML=rows.length?"":'<div class="empty">这个分类还没有参考图。可以点击“新增参考”手动添加。</div>';
- rows.forEach(x=>{
-  const c=document.createElement("article");c.className="card";
-  const pos=x.position||"50% 50%",scale=x.scale||1;
-  c.innerHTML='<div class="thumb"><img loading="lazy" src="'+x.image+'" style="object-position:'+pos+';transform:scale('+scale+')"><span class="badge">'+(x.era||x.category)+'</span>'+(x.custom?'<span class="custombadge">手动添加</span>':'')+'</div>'+
-  '<div class="meta"><h3>'+escapeHTML(x.title||"未命名参考")+'</h3><div class="line">'+escapeHTML(x.institution||"未填写来源机构")+'</div><div class="line">'+escapeHTML(x.type||x.category)+'</div>'+
-  '<div class="chips">'+(x.tags||[]).slice(0,3).map(t=>'<span class="chip">'+escapeHTML(t)+'</span>').join("")+'</div></div>';
-  c.onclick=()=>openDetail(x);grid.appendChild(c);
- });
-}
-function escapeHTML(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
-function openDetail(x){
- currentDetail=x;$("#mtitle").textContent=x.title||"";$("#mcategory").textContent=x.category||"";
- $("#mera").textContent=x.era||"未填写";$("#mtype").textContent=x.type||"未填写";$("#minst").textContent=x.institution||"未填写";
- $("#mfocus").textContent=x.focus||((x.tags||[]).join("、")||"未填写");$("#mnote").textContent=x.note||"";
- $("#mimg").src=x.image||"";$("#mlink").href=x.source||x.image||"#";$("#mlink").style.display=(x.source||x.image)?"inline-block":"none";
- $("#deleteCustom").style.display=x.custom?"inline-block":"none";$("#detailModal").classList.add("show");
-}
-function openModal(id){$("#"+id).classList.add("show")}
-function closeModal(id){$("#"+id).classList.remove("show")}
+function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+function openModal(id){$("#"+id).classList.add("show")}function closeModal(id){$("#"+id).classList.remove("show")}
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>closeModal(b.dataset.close));
 document.querySelectorAll(".modal").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("show")}));
-document.addEventListener("keydown",e=>{if(e.key==="Escape")document.querySelectorAll(".modal.show").forEach(m=>m.classList.remove("show"))});
 
-function showCategoryModal(){$("#newCategoryName").value="";openModal("categoryModal");setTimeout(()=>$("#newCategoryName").focus(),50)}
-$("#addCategoryTop").onclick=showCategoryModal;$("#addCategorySide").onclick=showCategoryModal;
-$("#saveCategory").onclick=()=>{
- const name=$("#newCategoryName").value.trim();if(!name)return alert("请输入大类名称");
- const cats=allCategories();if(cats.includes(name))return alert("这个大类已经存在");
- const custom=customCategories();custom.push(name);saveJSON(STORAGE_CAT,custom);activeCategory=name;closeModal("categoryModal");renderCategories();render();
-};
-$("#newCategoryName").addEventListener("keydown",e=>{if(e.key==="Enter")$("#saveCategory").click()});
-
-function showItemModal(){
- renderCategories();$("#fTitle").value="";$("#fImage").value="";$("#fSource").value="";$("#fEra").value="";$("#fType").value="";$("#fInstitution").value="";$("#fTags").value="";$("#fNote").value="";
- $("#fCategory").value=activeCategory!=="全部参考"&&allCategories().includes(activeCategory)?activeCategory:"灶台";openModal("itemModal");
+async function loadAll(){
+ const [{data:c,error:ce},{data:r,error:re}]=await Promise.all([
+   db.from("categories").select("*").order("sort_order"),
+   db.from("references").select("*,categories(id,name)").order("created_at",{ascending:false})
+ ]);
+ if(ce||re){console.error(ce||re);return}
+ categories=c||[];refs=(r||[]).map(x=>({...x,category:x.categories?.name||"其他"}));
+ fillFilters();renderCategories();render();
 }
-$("#addItemTop").onclick=showItemModal;
-$("#saveItem").onclick=()=>{
- const title=$("#fTitle").value.trim(),category=$("#fCategory").value,image=$("#fImage").value.trim();
- if(!title||!category||!image)return alert("标题、大类和图片地址为必填项");
- const items=customItems();
- items.push({id:"custom-"+Date.now(),title,category,image,source:$("#fSource").value.trim(),era:$("#fEra").value.trim(),type:$("#fType").value.trim(),institution:$("#fInstitution").value.trim(),tags:$("#fTags").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),note:$("#fNote").value.trim(),focus:"手动添加",position:"50% 50%",scale:1});
- saveJSON(STORAGE_ITEMS,items);activeCategory=category;closeModal("itemModal");fillFilters();renderCategories();render();
-};
-$("#deleteCustom").onclick=()=>{
- if(!currentDetail?.custom)return;
- if(!confirm("确定删除这条手动添加的参考吗？"))return;
- const items=customItems().filter(x=>x.id!==currentDetail.id);saveJSON(STORAGE_ITEMS,items);closeModal("detailModal");fillFilters();renderCategories();render();
-};
+function fillFilters(){
+ const ev=$("#era").value,tv=$("#type").value;
+ $("#era").innerHTML='<option value="">全部年代</option>';$("#type").innerHTML='<option value="">全部类型</option>';
+ [...new Set(refs.map(x=>x.era).filter(Boolean))].sort().forEach(v=>$("#era").add(new Option(v,v)));
+ [...new Set(refs.map(x=>x.type).filter(Boolean))].sort().forEach(v=>$("#type").add(new Option(v,v)));
+ $("#era").value=ev;$("#type").value=tv;
+ $("#fCategory").innerHTML="";categories.forEach(c=>$("#fCategory").add(new Option(c.name,c.id)));
+}
+function renderCategories(){
+ const box=$("#categories");box.innerHTML="";
+ ["全部参考",...categories.map(c=>c.name)].forEach(name=>{
+   const n=name==="全部参考"?refs.length:refs.filter(x=>x.category===name).length;
+   const b=document.createElement("button");b.className="cat"+(name===activeCategory?" active":"");
+   b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';b.onclick=()=>{activeCategory=name;renderCategories();render()};box.appendChild(b);
+ });
+}
+function render(){
+ const term=$("#q").value.trim().toLowerCase(),ev=$("#era").value,tv=$("#type").value;
+ const rows=refs.filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
+ $("#currentTitle").textContent=activeCategory;$("#stats").textContent="显示 "+rows.length+" / "+refs.length+" 条参考";
+ $("#grid").innerHTML=rows.length?"":'<div class="empty">这个分类还没有参考图。</div>';
+ rows.forEach(x=>{
+  const card=document.createElement("article");card.className="card";
+  card.innerHTML='<div class="thumb"><img loading="lazy" src="'+esc(x.image_url)+'"><span class="badge">'+esc(x.era||x.category)+'</span></div><div class="meta"><h3>'+esc(x.title)+'</h3><div class="line">'+esc(x.institution||"未填写来源")+'</div><div class="line">'+esc(x.type||x.category)+'</div><div class="chips">'+(x.tags||[]).slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join("")+'</div><div class="card-actions"><button class="mini view">查看</button>'+(user?'<button class="mini edit">编辑</button><button class="mini del">删除</button>':'')+'</div></div>';
+  card.querySelector(".view").onclick=()=>viewItem(x);
+  if(user){card.querySelector(".edit").onclick=()=>editItem(x);card.querySelector(".del").onclick=()=>deleteItem(x)}
+  $("#grid").appendChild(card);
+ });
+}
+function viewItem(x){$("#viewImage").src=x.image_url;$("#viewTitle").textContent=x.title;$("#viewMeta").textContent=[x.category,x.era,x.type,x.institution,x.focus].filter(Boolean).join(" · ");$("#viewNote").textContent=x.note||"";$("#viewSource").href=x.source_url||x.image_url;openModal("viewModal")}
+function clearForm(){["fTitle","fImage","fSource","fEra","fType","fInstitution","fFocus","fTags","fNote"].forEach(id=>$("#"+id).value="");$("#fFile").value=""}
+function editItem(x){editingId=x.id;$("#itemModalTitle").textContent="编辑参考";$("#fTitle").value=x.title||"";$("#fCategory").value=x.category_id;$("#fImage").value=x.image_url||"";$("#fSource").value=x.source_url||"";$("#fEra").value=x.era||"";$("#fType").value=x.type||"";$("#fInstitution").value=x.institution||"";$("#fFocus").value=x.focus||"";$("#fTags").value=(x.tags||[]).join(", ");$("#fNote").value=x.note||"";openModal("itemModal")}
+async function deleteItem(x){if(!confirm("确定删除“"+x.title+"”吗？"))return;const {error}=await db.from("references").delete().eq("id",x.id);if(error)alert(error.message)}
+async function uploadImage(file){
+ const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"");
+ const path=(user?.id||"user")+"/"+crypto.randomUUID()+"."+ext;
+ const {error}=await db.storage.from("art-reference-images").upload(path,file,{upsert:false,contentType:file.type||undefined});
+ if(error)throw error;
+ return db.storage.from("art-reference-images").getPublicUrl(path).data.publicUrl;
+}
+async function saveItem(){
+ if(!user)return alert("请先登录");
+ const title=$("#fTitle").value.trim(),category_id=$("#fCategory").value,file=$("#fFile").files[0];let image_url=$("#fImage").value.trim();
+ if(!title||!category_id)return alert("标题和大类为必填");
+ $("#saveMsg").textContent="正在保存…";
+ try{
+   if(file)image_url=await uploadImage(file);
+   if(!image_url)throw new Error("请上传图片或填写图片地址");
+   const payload={title,category_id,image_url,source_url:$("#fSource").value.trim()||null,era:$("#fEra").value.trim()||null,type:$("#fType").value.trim()||null,institution:$("#fInstitution").value.trim()||null,focus:$("#fFocus").value.trim()||null,note:$("#fNote").value.trim()||null,tags:$("#fTags").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),updated_by:user.id};
+   let res;if(editingId)res=await db.from("references").update(payload).eq("id",editingId);else res=await db.from("references").insert({...payload,created_by:user.id});
+   if(res.error)throw res.error;
+   closeModal("itemModal");editingId=null;clearForm();await loadAll();
+ }catch(e){$("#saveMsg").textContent="保存失败："+e.message}
+}
+async function saveCategory(){
+ const name=$("#newCategoryName").value.trim();if(!name)return;
+ const max=categories.reduce((m,c)=>Math.max(m,c.sort_order||0),0);
+ const {error}=await db.from("categories").insert({name,sort_order:max+10,created_by:user.id});
+ if(error)return alert(error.message);$("#newCategoryName").value="";closeModal("categoryModal");await loadAll();
+}
+async function refreshAuth(){
+ const {data:{session}}=await db.auth.getSession();user=session?.user||null;
+ $(".editorOnly");document.querySelectorAll(".editorOnly").forEach(el=>el.style.display=user?"inline-block":"none");
+ $("#authBtn").textContent=user?"退出登录":"登录";
+ $("#userStatus").textContent=user?"已登录："+user.email:"当前为只读模式；登录后可协作编辑";
+ render();
+}
+$("#authBtn").onclick=async()=>{if(user){await db.auth.signOut();await refreshAuth()}else openModal("authModal")};
+$("#loginBtn").onclick=async()=>{const email=$("#authEmail").value.trim(),password=$("#authPassword").value;const {error}=await db.auth.signInWithPassword({email,password});$("#authMsg").textContent=error?error.message:"登录成功";if(!error){closeModal("authModal");await refreshAuth()}};
+$("#signupBtn").onclick=async()=>{const email=$("#authEmail").value.trim(),password=$("#authPassword").value;const {data,error}=await db.auth.signUp({email,password});$("#authMsg").textContent=error?error.message:(data.session?"账号已创建并登录":"账号已创建，请检查邮箱完成验证后再登录")};
+$("#addCategoryBtn").onclick=()=>openModal("categoryModal");
+$("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
+$("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
+["q","era","type"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
 
-[q,era,type].forEach(el=>el.addEventListener(el===q?"input":"change",render));
-fillFilters();renderCategories();render();
+db.auth.onAuthStateChange(()=>refreshAuth());
+db.channel("art-reference-live")
+ .on("postgres_changes",{event:"*",schema:"public",table:"categories"},()=>loadAll())
+ .on("postgres_changes",{event:"*",schema:"public",table:"references"},()=>loadAll())
+ .subscribe();
+setInterval(loadAll,30000);
+(async()=>{await loadAll();await refreshAuth()})();
 </script>
-</body>
-</html>
+</body></html>
