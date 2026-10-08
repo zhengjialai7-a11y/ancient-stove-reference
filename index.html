@@ -46,6 +46,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <button class="btn secondary" id="clearFiltersBtn" type="button">清空筛选</button>
 <select id="era"><option value="">全部年代</option></select>
 <select id="type"><option value="">全部类型</option></select>
+<select id="sourceSite"><option value="">全部来源</option></select>
 <button class="btn secondary" id="authBtn">登录</button>
 <button class="btn secondary editorOnly" id="addCategoryBtn" style="display:none">＋ 新增大类</button>
 <button class="btn editorOnly" id="addItemBtn" style="display:none">＋ 新增参考</button>
@@ -145,11 +146,12 @@ async function loadAll(){
  fillFilters();renderCategories();render();syncDetailFromHash();
 }
 function fillFilters(){
- const ev=$("#era").value,tv=$("#type").value;
- $("#era").innerHTML='<option value="">全部年代</option>';$("#type").innerHTML='<option value="">全部类型</option>';
+ const ev=$("#era").value,tv=$("#type").value,sv=$("#sourceSite").value;
+ $("#era").innerHTML='<option value="">全部年代</option>';$("#type").innerHTML='<option value="">全部类型</option>';$("#sourceSite").innerHTML='<option value="">全部来源</option>';
  [...new Set(refs.map(x=>x.era).filter(Boolean))].sort().forEach(v=>$("#era").add(new Option(v,v)));
  [...new Set(refs.map(x=>x.type).filter(Boolean))].sort().forEach(v=>$("#type").add(new Option(v,v)));
- $("#era").value=ev;$("#type").value=tv;
+ [...new Set(refs.map(x=>x.source_site).filter(Boolean))].sort().forEach(v=>$("#sourceSite").add(new Option(v,v)));
+ $("#era").value=ev;$("#type").value=tv;$("#sourceSite").value=sv;
  $("#fCategory").innerHTML="";categories.forEach(c=>$("#fCategory").add(new Option(c.name,c.id)));
 }
 function renderCategories(){
@@ -166,14 +168,14 @@ function sanitizeSearch(){
  if(v && (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || (user?.email && v.toLowerCase()===user.email.toLowerCase()))) el.value="";
 }
 function clearFilters(){
- $("#q").value=""; $("#era").value=""; $("#type").value=""; render();
+ $("#q").value=""; $("#era").value=""; $("#type").value=""; $("#sourceSite").value=""; render();
 }
 function render(){
  sanitizeSearch();
- const term=$("#q").value.trim().toLowerCase(),ev=$("#era").value,tv=$("#type").value;
- const rows=refs.filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
+ const term=$("#q").value.trim().toLowerCase(),ev=$("#era").value,tv=$("#type").value,sv=$("#sourceSite").value;
+ const rows=refs.filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!sv||x.source_site===sv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
  $("#currentTitle").textContent=activeCategory;$("#stats").textContent="显示 "+rows.length+" / "+refs.length+" 条参考";
- const hasFilter=!!(term||ev||tv);
+ const hasFilter=!!(term||ev||tv||sv);
  $("#grid").innerHTML=rows.length?"":(hasFilter?'<div class="empty">当前筛选没有结果。<br><button class="mini" id="emptyClearBtn" style="margin-top:12px">清空筛选</button></div>':'<div class="empty">这个分类还没有参考图。</div>');
  if(!rows.length&&hasFilter){const b=$("#emptyClearBtn");if(b)b.onclick=clearFilters;}
  rows.forEach(x=>{
@@ -293,7 +295,7 @@ $("#resendBtn").onclick=async()=>{
 $("#addCategoryBtn").onclick=()=>openModal("categoryModal");
 $("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
 $("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
-["q","era","type"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
+["q","era","type","sourceSite"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
 $("#clearFiltersBtn").onclick=clearFilters;
 $("#q").addEventListener("focus",sanitizeSearch);
 setTimeout(()=>{sanitizeSearch();render()},300);
