@@ -29,6 +29,11 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 .detail-image-wrap{background:#201f1c;border-radius:14px;min-height:520px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
 .detail-image-wrap img,.detail-image-wrap canvas{max-width:100%;max-height:76vh;object-fit:contain;display:block;cursor:zoom-in}
 .detail-image-hint{position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.58);color:#fff;padding:6px 9px;border-radius:8px;font-size:12px;pointer-events:none}
+.detail-nav{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:46px;height:58px;border:0;border-radius:12px;background:rgba(0,0,0,.55);color:#fff;font-size:34px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;backdrop-filter:blur(6px)}
+.detail-nav:hover{background:rgba(0,0,0,.72)}
+.detail-nav:disabled{opacity:.22;cursor:default}
+.detail-nav.prev{left:12px}.detail-nav.next{right:12px}
+.detail-counter{position:absolute;right:12px;bottom:12px;z-index:4;background:rgba(0,0,0,.58);color:#fff;padding:6px 9px;border-radius:8px;font-size:12px;pointer-events:none}
 .zoom-viewer{position:fixed;inset:0;z-index:300;background:rgba(10,10,10,.96);display:none}
 .zoom-viewer.show{display:block}
 .zoom-stage{position:absolute;inset:0;overflow:hidden;cursor:grab;touch-action:none}
@@ -74,7 +79,13 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <div class="detail-page" id="detailPage">
   <button class="btn secondary detail-back" id="detailBackBtn">← 返回图库</button>
   <div class="detail-shell">
-    <div class="detail-image-wrap" id="detailImageWrap"><img id="detailImage" alt=""><canvas id="detailCanvas" style="display:none"></canvas><div class="detail-image-hint">点击放大查看 · 滚轮缩放</div></div>
+    <div class="detail-image-wrap" id="detailImageWrap">
+      <button class="detail-nav prev" id="detailPrevBtn" type="button" aria-label="上一张">‹</button>
+      <img id="detailImage" alt=""><canvas id="detailCanvas" style="display:none"></canvas>
+      <button class="detail-nav next" id="detailNextBtn" type="button" aria-label="下一张">›</button>
+      <div class="detail-image-hint">点击放大查看 · 滚轮缩放</div>
+      <div class="detail-counter" id="detailCounter"></div>
+    </div>
     <div class="detail-panel">
       <h2 id="detailTitle"></h2>
       <div class="detail-kv">
@@ -162,7 +173,7 @@ const SUPABASE_KEY="sb_publishable_hA9UHbP834axMbvdRRbwyA_4dUTU2-B";
 const APP_URL="https://zhengjialai7-a11y.github.io/ancient-stove-reference/";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
-let categories=[],refs=[],user=null,activeCategory="全部参考",editingId=null;
+let categories=[],refs=[],user=null,activeCategory="全部参考",editingId=null,currentDetailId=null;
 
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function openModal(id){$("#"+id).classList.add("show")}function closeModal(id){$("#"+id).classList.remove("show")}
@@ -204,10 +215,15 @@ function sanitizeSearch(){
 function clearFilters(){
  $("#q").value=""; $("#era").value=""; $("#type").value=""; $("#subCategoryFilter").value=""; $("#sourceSite").value=""; render();
 }
+function getBrowseRows(){
+ sanitizeSearch();
+ const term=$("#q").value.trim().toLowerCase(),ev=$("#era").value,tv=$("#type").value,subv=$("#subCategoryFilter").value,sv=$("#sourceSite").value;
+ return refs.filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!subv||x.sub_category===subv)&&(!sv||x.source_site===sv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
+}
 function render(){
  sanitizeSearch();
  const term=$("#q").value.trim().toLowerCase(),ev=$("#era").value,tv=$("#type").value,subv=$("#subCategoryFilter").value,sv=$("#sourceSite").value;
- const rows=refs.filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!subv||x.sub_category===subv)&&(!sv||x.source_site===sv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
+ const rows=getBrowseRows();
  $("#currentTitle").textContent=activeCategory;$("#stats").textContent="显示 "+rows.length+" / "+refs.length+" 条参考";
  const hasFilter=!!(term||ev||tv||subv||sv);
  $("#grid").innerHTML=rows.length?"":(hasFilter?'<div class="empty">当前筛选没有结果。<br><button class="mini" id="emptyClearBtn" style="margin-top:12px">清空筛选</button></div>':'<div class="empty">这个分类还没有参考图。</div>');
@@ -350,11 +366,36 @@ $("#zoomOutBtn").onclick=()=>zoomAt(1/1.25);
 $("#zoomResetBtn").onclick=fitZoom;
 $("#zoomCloseBtn").onclick=closeZoomViewer;
 window.addEventListener("keydown",e=>{
-  if(e.key==="Escape"&&$("#zoomViewer").classList.contains("show"))closeZoomViewer();
+  if(e.key==="Escape"&&$("#zoomViewer").classList.contains("show")){closeZoomViewer();return}
+  if($("#zoomViewer").classList.contains("show"))return;
+  if(!$("#detailPage").classList.contains("show"))return;
+  if(e.key==="ArrowLeft"){e.preventDefault();navigateDetail(-1)}
+  if(e.key==="ArrowRight"){e.preventDefault();navigateDetail(1)}
 });
 window.addEventListener("resize",()=>{
   if($("#zoomViewer").classList.contains("show"))fitZoom();
 });
+
+function updateDetailNav(x){
+ currentDetailId=x?.id||null;
+ let rows=getBrowseRows();
+ let idx=rows.findIndex(r=>String(r.id)===String(x?.id));
+ if(idx<0){rows=refs;idx=rows.findIndex(r=>String(r.id)===String(x?.id))}
+ const prev=$("#detailPrevBtn"),next=$("#detailNextBtn"),counter=$("#detailCounter");
+ prev.disabled=idx<=0;
+ next.disabled=idx<0||idx>=rows.length-1;
+ counter.textContent=idx>=0?(idx+1)+" / "+rows.length:"";
+}
+function navigateDetail(step){
+ if(!currentDetailId)return;
+ let rows=getBrowseRows();
+ let idx=rows.findIndex(r=>String(r.id)===String(currentDetailId));
+ if(idx<0){rows=refs;idx=rows.findIndex(r=>String(r.id)===String(currentDetailId))}
+ const target=rows[idx+step];
+ if(target)openDetailPage(target,true);
+}
+$("#detailPrevBtn").onclick=e=>{e.stopPropagation();navigateDetail(-1)};
+$("#detailNextBtn").onclick=e=>{e.stopPropagation();navigateDetail(1)};
 
 function openDetailPage(x,updateHash=true){
  if(!x)return;
@@ -392,10 +433,12 @@ function openDetailPage(x,updateHash=true){
  $("#detailOfficialSource").style.display=x.official_source_url?"inline-block":"none";
  $("#detailEditBtn").onclick=()=>editItem(x);
  $("#detailDeleteBtn").onclick=()=>deleteItem(x);
+ updateDetailNav(x);
  if(updateHash) history.pushState(null,"","#ref="+encodeURIComponent(x.id));
  window.scrollTo({top:0,behavior:"smooth"});
 }
 function closeDetailPage(updateHash=true){
+ currentDetailId=null;
  $("#detailPage").classList.remove("show");
  $("#listView").style.display="";
  if(updateHash && location.hash.startsWith("#ref=")) history.pushState(null,"",location.pathname+location.search);
