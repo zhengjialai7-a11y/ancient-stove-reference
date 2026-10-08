@@ -46,6 +46,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <button class="btn secondary" id="clearFiltersBtn" type="button">清空筛选</button>
 <select id="era"><option value="">全部年代</option></select>
 <select id="type"><option value="">全部类型</option></select>
+<select id="subCategoryFilter"><option value="">全部细分</option></select>
 <select id="sourceSite"><option value="">全部来源</option></select>
 <button class="btn secondary" id="authBtn">登录</button>
 <button class="btn secondary editorOnly" id="addCategoryBtn" style="display:none">＋ 新增大类</button>
@@ -68,6 +69,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
       <h2 id="detailTitle"></h2>
       <div class="detail-kv">
         <div class="k">大类</div><div id="detailCategory"></div>
+        <div class="k">细分</div><div id="detailSubCategory"></div>
         <div class="k">年代</div><div id="detailEra"></div>
         <div class="k">类型</div><div id="detailType"></div>
         <div class="k">作者</div><div id="detailArtist"></div>
@@ -108,6 +110,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <div class="formgrid">
 <div><label>标题 *</label><input id="fTitle"></div>
 <div><label>大类 *</label><select id="fCategory"></select></div>
+<div><label>细分</label><input id="fSubCategory" placeholder="例如：书柜 / 多宝格 / 琴桌 / 折屏"></div>
 <div class="full"><label>上传图片</label><input id="fFile" type="file" accept="image/*"></div>
 <div class="full"><label>或填写图片地址</label><input id="fImage" placeholder="https://...jpg"></div>
 <div class="full"><label>来源页</label><input id="fSource"></div>
@@ -146,12 +149,13 @@ async function loadAll(){
  fillFilters();renderCategories();render();syncDetailFromHash();
 }
 function fillFilters(){
- const ev=$("#era").value,tv=$("#type").value,sv=$("#sourceSite").value;
- $("#era").innerHTML='<option value="">全部年代</option>';$("#type").innerHTML='<option value="">全部类型</option>';$("#sourceSite").innerHTML='<option value="">全部来源</option>';
+ const ev=$("#era").value,tv=$("#type").value,subv=$("#subCategoryFilter").value,sv=$("#sourceSite").value;
+ $("#era").innerHTML='<option value="">全部年代</option>';$("#type").innerHTML='<option value="">全部类型</option>';$("#subCategoryFilter").innerHTML='<option value="">全部细分</option>';$("#sourceSite").innerHTML='<option value="">全部来源</option>';
  [...new Set(refs.map(x=>x.era).filter(Boolean))].sort().forEach(v=>$("#era").add(new Option(v,v)));
  [...new Set(refs.map(x=>x.type).filter(Boolean))].sort().forEach(v=>$("#type").add(new Option(v,v)));
+ [...new Set(refs.map(x=>x.sub_category).filter(Boolean))].sort().forEach(v=>$("#subCategoryFilter").add(new Option(v,v)));
  [...new Set(refs.map(x=>x.source_site).filter(Boolean))].sort().forEach(v=>$("#sourceSite").add(new Option(v,v)));
- $("#era").value=ev;$("#type").value=tv;$("#sourceSite").value=sv;
+ $("#era").value=ev;$("#type").value=tv;$("#subCategoryFilter").value=subv;$("#sourceSite").value=sv;
  $("#fCategory").innerHTML="";categories.forEach(c=>$("#fCategory").add(new Option(c.name,c.id)));
 }
 function renderCategories(){
@@ -168,14 +172,14 @@ function sanitizeSearch(){
  if(v && (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || (user?.email && v.toLowerCase()===user.email.toLowerCase()))) el.value="";
 }
 function clearFilters(){
- $("#q").value=""; $("#era").value=""; $("#type").value=""; $("#sourceSite").value=""; render();
+ $("#q").value=""; $("#era").value=""; $("#type").value=""; $("#subCategoryFilter").value=""; $("#sourceSite").value=""; render();
 }
 function render(){
  sanitizeSearch();
- const term=$("#q").value.trim().toLowerCase(),ev=$("#era").value,tv=$("#type").value,sv=$("#sourceSite").value;
- const rows=refs.filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!sv||x.source_site===sv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
+ const term=$("#q").value.trim().toLowerCase(),ev=$("#era").value,tv=$("#type").value,subv=$("#subCategoryFilter").value,sv=$("#sourceSite").value;
+ const rows=refs.filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!subv||x.sub_category===subv)&&(!sv||x.source_site===sv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
  $("#currentTitle").textContent=activeCategory;$("#stats").textContent="显示 "+rows.length+" / "+refs.length+" 条参考";
- const hasFilter=!!(term||ev||tv||sv);
+ const hasFilter=!!(term||ev||tv||subv||sv);
  $("#grid").innerHTML=rows.length?"":(hasFilter?'<div class="empty">当前筛选没有结果。<br><button class="mini" id="emptyClearBtn" style="margin-top:12px">清空筛选</button></div>':'<div class="empty">这个分类还没有参考图。</div>');
  if(!rows.length&&hasFilter){const b=$("#emptyClearBtn");if(b)b.onclick=clearFilters;}
  rows.forEach(x=>{
@@ -198,6 +202,7 @@ function openDetailPage(x,updateHash=true){
  $("#detailImage").alt=x.title||"";
  $("#detailTitle").textContent=x.title||"未命名参考";
  $("#detailCategory").textContent=x.category||"未分类";
+ $("#detailSubCategory").textContent=x.sub_category||"未填写";
  $("#detailEra").textContent=x.era||"未填写";
  $("#detailType").textContent=x.type||"未填写";
  $("#detailArtist").textContent=x.artist||"未填写";
@@ -227,8 +232,8 @@ function syncDetailFromHash(){
 }
 $("#detailBackBtn").onclick=()=>closeDetailPage(true);
 window.addEventListener("popstate",syncDetailFromHash);
-function clearForm(){["fTitle","fImage","fSource","fEra","fType","fInstitution","fFocus","fTags","fNote"].forEach(id=>$("#"+id).value="");$("#fFile").value=""}
-function editItem(x){editingId=x.id;$("#itemModalTitle").textContent="编辑参考";$("#fTitle").value=x.title||"";$("#fCategory").value=x.category_id;$("#fImage").value=x.image_url||"";$("#fSource").value=x.source_url||"";$("#fEra").value=x.era||"";$("#fType").value=x.type||"";$("#fInstitution").value=x.institution||"";$("#fFocus").value=x.focus||"";$("#fTags").value=(x.tags||[]).join(", ");$("#fNote").value=x.note||"";openModal("itemModal")}
+function clearForm(){["fTitle","fSubCategory","fImage","fSource","fEra","fType","fInstitution","fFocus","fTags","fNote"].forEach(id=>$("#"+id).value="");$("#fFile").value=""}
+function editItem(x){editingId=x.id;$("#itemModalTitle").textContent="编辑参考";$("#fTitle").value=x.title||"";$("#fCategory").value=x.category_id;$("#fSubCategory").value=x.sub_category||"";$("#fImage").value=x.image_url||"";$("#fSource").value=x.source_url||"";$("#fEra").value=x.era||"";$("#fType").value=x.type||"";$("#fInstitution").value=x.institution||"";$("#fFocus").value=x.focus||"";$("#fTags").value=(x.tags||[]).join(", ");$("#fNote").value=x.note||"";openModal("itemModal")}
 async function deleteItem(x){if(!confirm("确定删除“"+x.title+"”吗？"))return;const {error}=await db.from("references").delete().eq("id",x.id);if(error)alert(error.message)}
 async function uploadImage(file){
  const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"");
@@ -245,7 +250,7 @@ async function saveItem(){
  try{
    if(file)image_url=await uploadImage(file);
    if(!image_url)throw new Error("请上传图片或填写图片地址");
-   const payload={title,category_id,image_url,source_url:$("#fSource").value.trim()||null,era:$("#fEra").value.trim()||null,type:$("#fType").value.trim()||null,institution:$("#fInstitution").value.trim()||null,focus:$("#fFocus").value.trim()||null,note:$("#fNote").value.trim()||null,tags:$("#fTags").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),updated_by:user.id};
+   const payload={title,category_id,sub_category:$("#fSubCategory").value.trim()||null,image_url,source_url:$("#fSource").value.trim()||null,era:$("#fEra").value.trim()||null,type:$("#fType").value.trim()||null,institution:$("#fInstitution").value.trim()||null,focus:$("#fFocus").value.trim()||null,note:$("#fNote").value.trim()||null,tags:$("#fTags").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),updated_by:user.id};
    let res;if(editingId)res=await db.from("references").update(payload).eq("id",editingId);else res=await db.from("references").insert({...payload,created_by:user.id});
    if(res.error)throw res.error;
    closeModal("itemModal");editingId=null;clearForm();await loadAll();
@@ -295,7 +300,7 @@ $("#resendBtn").onclick=async()=>{
 $("#addCategoryBtn").onclick=()=>openModal("categoryModal");
 $("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
 $("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
-["q","era","type","sourceSite"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
+["q","era","type","subCategoryFilter","sourceSite"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
 $("#clearFiltersBtn").onclick=clearFilters;
 $("#q").addEventListener("focus",sanitizeSearch);
 setTimeout(()=>{sanitizeSearch();render()},300);
