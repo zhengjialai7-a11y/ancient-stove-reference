@@ -68,6 +68,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
     <div class="detail-panel">
       <h2 id="detailTitle"></h2>
       <div class="detail-kv">
+        <div class="k">原作</div><div id="detailWorkTitle"></div>
         <div class="k">大类</div><div id="detailCategory"></div>
         <div class="k">细分</div><div id="detailSubCategory"></div>
         <div class="k">年代</div><div id="detailEra"></div>
@@ -75,12 +76,17 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
         <div class="k">作者</div><div id="detailArtist"></div>
         <div class="k">来源机构</div><div id="detailInstitution"></div>
         <div class="k">来源网站</div><div id="detailSourceSite"></div>
+        <div class="k">材质</div><div id="detailMaterial"></div>
+        <div class="k">尺寸</div><div id="detailDimensions"></div>
+        <div class="k">文物号</div><div id="detailObjectNo"></div>
+        <div class="k">归属说明</div><div id="detailAttribution"></div>
         <div class="k">绘制重点</div><div id="detailFocus"></div>
         <div class="k">说明</div><div id="detailNote"></div>
       </div>
       <div class="detail-tags" id="detailTags"></div>
       <div class="card-actions" style="margin-top:18px">
-        <a class="btn secondary" id="detailSource" target="_blank" rel="noopener">查看来源页 ↗</a>
+        <a class="btn secondary" id="detailSource" target="_blank" rel="noopener">查看中华珍宝馆来源 ↗</a>
+        <a class="btn secondary" id="detailOfficialSource" target="_blank" rel="noopener">查看官方馆藏页 ↗</a>
         <button class="btn secondary editorOnly" id="detailEditBtn" style="display:none">编辑</button>
         <button class="btn danger editorOnly" id="detailDeleteBtn" style="display:none">删除</button>
       </div>
@@ -201,6 +207,7 @@ function openDetailPage(x,updateHash=true){
  $("#detailImage").src=x.image_url||"";
  $("#detailImage").alt=x.title||"";
  $("#detailTitle").textContent=x.title||"未命名参考";
+ $("#detailWorkTitle").textContent=x.work_title||x.title||"未填写";
  $("#detailCategory").textContent=x.category||"未分类";
  $("#detailSubCategory").textContent=x.sub_category||"未填写";
  $("#detailEra").textContent=x.era||"未填写";
@@ -208,11 +215,17 @@ function openDetailPage(x,updateHash=true){
  $("#detailArtist").textContent=x.artist||"未填写";
  $("#detailInstitution").textContent=x.institution||"未填写";
  $("#detailSourceSite").textContent=x.source_site||"未填写";
+ $("#detailMaterial").textContent=x.material||"未填写";
+ $("#detailDimensions").textContent=x.dimensions||"未填写";
+ $("#detailObjectNo").textContent=x.object_no||"未填写";
+ $("#detailAttribution").textContent=x.attribution_note||"未填写";
  $("#detailFocus").textContent=x.focus||"未填写";
  $("#detailNote").textContent=x.note||"";
  $("#detailTags").innerHTML=(x.tags||[]).map(t=>'<span class="chip">'+esc(t)+'</span>').join("");
  $("#detailSource").href=x.source_url||x.image_url||"#";
  $("#detailSource").style.display=(x.source_url||x.image_url)?"inline-block":"none";
+ $("#detailOfficialSource").href=x.official_source_url||"#";
+ $("#detailOfficialSource").style.display=x.official_source_url?"inline-block":"none";
  $("#detailEditBtn").onclick=()=>editItem(x);
  $("#detailDeleteBtn").onclick=()=>deleteItem(x);
  if(updateHash) history.pushState(null,"","#ref="+encodeURIComponent(x.id));
