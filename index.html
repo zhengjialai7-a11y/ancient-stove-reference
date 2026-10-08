@@ -106,9 +106,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
       </div>
       <div class="detail-tags" id="detailTags"></div>
       <div class="card-actions" style="margin-top:18px">
-        <a class="btn secondary" id="detailSource" target="_blank" rel="noopener">查看中华珍宝馆来源 ↗</a>
-        <a class="btn secondary" id="detailOfficialSource" target="_blank" rel="noopener">查看官方馆藏页 ↗</a>
-        <a class="btn secondary" id="detailHighresSource" target="_blank" rel="noopener">查看高清原画 ↗</a>
+        <a class="btn secondary" id="detailSource" target="_blank" rel="noopener">查看来源 ↗</a>
         <button class="btn secondary editorOnly" id="detailEditBtn" style="display:none">编辑</button>
         <button class="btn danger editorOnly" id="detailDeleteBtn" style="display:none">删除</button>
       </div>
@@ -245,30 +243,35 @@ function render(){
 function hasCrop(x){
  return [x.crop_x,x.crop_y,x.crop_w,x.crop_h].every(v=>v!==null&&v!==undefined) && x.crop_w>0 && x.crop_h>0;
 }
-function drawCrop(canvas,x,detail=false){
- if(!canvas||!hasCrop(x))return;
+function drawCrop(canvas,x,detail=false,onDone=null){
+ if(!canvas||!hasCrop(x)){if(onDone)onDone(false);return}
  const img=new Image();
  img.onload=()=>{
    const sx=x.crop_x*img.naturalWidth,sy=x.crop_y*img.naturalHeight,sw=x.crop_w*img.naturalWidth,sh=x.crop_h*img.naturalHeight;
    const ctx=canvas.getContext("2d");
    if(detail){
-     const maxW=2200,maxH=1500;
-     const ratio=Math.min(maxW/sw,maxH/sh);
+     // Keep the real source resolution whenever possible. Never enlarge a small source.
+     const maxW=5000,maxH=3500;
+     const ratio=Math.min(1,maxW/sw,maxH/sh);
      canvas.width=Math.max(1,Math.round(sw*ratio));
      canvas.height=Math.max(1,Math.round(sh*ratio));
      ctx.imageSmoothingEnabled=true;
      ctx.imageSmoothingQuality="high";
+     ctx.clearRect(0,0,canvas.width,canvas.height);
      ctx.drawImage(img,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
    }else{
      canvas.width=600;canvas.height=420;
      ctx.imageSmoothingEnabled=true;
      ctx.imageSmoothingQuality="high";
+     ctx.clearRect(0,0,600,420);
      ctx.drawImage(img,sx,sy,sw,sh,0,0,600,420);
    }
+   if(onDone)onDone(true);
  };
  img.onerror=()=>{
    const ctx=canvas.getContext("2d");canvas.width=600;canvas.height=420;
    ctx.fillStyle="#eee8dc";ctx.fillRect(0,0,600,420);ctx.fillStyle="#777268";ctx.font="24px sans-serif";ctx.fillText("参考图加载失败",210,215);
+   if(onDone)onDone(false);
  };
  img.src=x.image_url;
 }
@@ -300,13 +303,15 @@ function openZoomViewer(){
   const viewer=$("#zoomViewer"),zi=$("#zoomImage"),zc=$("#zoomCanvas");
   zi.style.display="none";zc.style.display="none";
   if(v.type==="canvas"){
-    zc.width=v.el.width; zc.height=v.el.height;
-    zc.getContext("2d").clearRect(0,0,zc.width,zc.height);
-    zc.getContext("2d").drawImage(v.el,0,0);
-    zoomState.target=zc; zoomState.w=zc.width; zoomState.h=zc.height;
+    const x=refs.find(r=>String(r.id)===String(currentDetailId));
+    if(!x||!hasCrop(x))return;
     zc.style.display="block";
     viewer.classList.add("show");viewer.setAttribute("aria-hidden","false");
-    requestAnimationFrame(fitZoom);
+    drawCrop(zc,x,true,ok=>{
+      if(!ok)return;
+      zoomState.target=zc;zoomState.w=zc.width;zoomState.h=zc.height;
+      requestAnimationFrame(fitZoom);
+    });
   }else{
     const start=()=>{
       zoomState.target=zi;zoomState.w=zi.naturalWidth||v.el.naturalWidth;zoomState.h=zi.naturalHeight||v.el.naturalHeight;
@@ -428,10 +433,7 @@ function openDetailPage(x,updateHash=true){
  $("#detailTags").innerHTML=(x.tags||[]).map(t=>'<span class="chip">'+esc(t)+'</span>').join("");
  $("#detailSource").href=x.source_url||x.image_url||"#";
  $("#detailSource").style.display=(x.source_url||x.image_url)?"inline-block":"none";
- $("#detailOfficialSource").href=x.official_source_url||"#";
- $("#detailOfficialSource").style.display=x.official_source_url?"inline-block":"none";
- $("#detailHighresSource").href=x.highres_url||"#";
- $("#detailHighresSource").style.display=x.highres_url?"inline-block":"none";
+
  $("#detailEditBtn").onclick=()=>editItem(x);
  $("#detailDeleteBtn").onclick=()=>deleteItem(x);
  updateDetailNav(x);
