@@ -30,7 +30,8 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <header><div class="wrap"><div class="top">
 <div><h1>美术绘制参考</h1><div class="sub"><span class="syncdot"></span>云端共享图库 · 多设备实时同步</div></div>
 <div class="toolbar">
-<input id="q" placeholder="搜索标题 / 标签 / 来源…">
+<input id="q" type="search" name="art_reference_query" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="搜索标题 / 标签 / 来源…">
+<button class="btn secondary" id="clearFiltersBtn" type="button">清空筛选</button>
 <select id="era"><option value="">全部年代</option></select>
 <select id="type"><option value="">全部类型</option></select>
 <button class="btn secondary" id="authBtn">登录</button>
@@ -120,14 +121,25 @@ function renderCategories(){
  ["全部参考",...categories.map(c=>c.name)].forEach(name=>{
    const n=name==="全部参考"?refs.length:refs.filter(x=>x.category===name).length;
    const b=document.createElement("button");b.className="cat"+(name===activeCategory?" active":"");
-   b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';b.onclick=()=>{activeCategory=name;renderCategories();render()};box.appendChild(b);
+   b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';b.onclick=()=>{activeCategory=name;sanitizeSearch();renderCategories();render()};box.appendChild(b);
  });
 }
+function sanitizeSearch(){
+ const el=$("#q"); if(!el) return;
+ const v=(el.value||"").trim();
+ if(v && (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || (user?.email && v.toLowerCase()===user.email.toLowerCase()))) el.value="";
+}
+function clearFilters(){
+ $("#q").value=""; $("#era").value=""; $("#type").value=""; render();
+}
 function render(){
+ sanitizeSearch();
  const term=$("#q").value.trim().toLowerCase(),ev=$("#era").value,tv=$("#type").value;
  const rows=refs.filter(x=>(activeCategory==="全部参考"||x.category===activeCategory)&&(!ev||x.era===ev)&&(!tv||x.type===tv)&&(!term||JSON.stringify(x).toLowerCase().includes(term)));
  $("#currentTitle").textContent=activeCategory;$("#stats").textContent="显示 "+rows.length+" / "+refs.length+" 条参考";
- $("#grid").innerHTML=rows.length?"":'<div class="empty">这个分类还没有参考图。</div>';
+ const hasFilter=!!(term||ev||tv);
+ $("#grid").innerHTML=rows.length?"":(hasFilter?'<div class="empty">当前筛选没有结果。<br><button class="mini" id="emptyClearBtn" style="margin-top:12px">清空筛选</button></div>':'<div class="empty">这个分类还没有参考图。</div>');
+ if(!rows.length&&hasFilter){const b=$("#emptyClearBtn");if(b)b.onclick=clearFilters;}
  rows.forEach(x=>{
   const card=document.createElement("article");card.className="card";
   card.innerHTML='<div class="thumb"><img loading="lazy" src="'+esc(x.image_url)+'"><span class="badge">'+esc(x.era||x.category)+'</span></div><div class="meta"><h3>'+esc(x.title)+'</h3><div class="line">'+esc(x.institution||"未填写来源")+'</div><div class="line">'+esc(x.type||x.category)+'</div><div class="chips">'+(x.tags||[]).slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join("")+'</div><div class="card-actions"><button class="mini view">查看</button>'+(user?'<button class="mini edit">编辑</button><button class="mini del">删除</button>':'')+'</div></div>';
@@ -206,6 +218,10 @@ $("#addCategoryBtn").onclick=()=>openModal("categoryModal");
 $("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
 $("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
 ["q","era","type"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
+$("#clearFiltersBtn").onclick=clearFilters;
+$("#q").addEventListener("focus",sanitizeSearch);
+setTimeout(()=>{sanitizeSearch();render()},300);
+setTimeout(()=>{sanitizeSearch();render()},1200);
 
 db.auth.onAuthStateChange(()=>refreshAuth());
 db.channel("art-reference-live")
