@@ -69,7 +69,9 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
         <div class="k">大类</div><div id="detailCategory"></div>
         <div class="k">年代</div><div id="detailEra"></div>
         <div class="k">类型</div><div id="detailType"></div>
+        <div class="k">作者</div><div id="detailArtist"></div>
         <div class="k">来源机构</div><div id="detailInstitution"></div>
+        <div class="k">来源网站</div><div id="detailSourceSite"></div>
         <div class="k">绘制重点</div><div id="detailFocus"></div>
         <div class="k">说明</div><div id="detailNote"></div>
       </div>
@@ -196,7 +198,9 @@ function openDetailPage(x,updateHash=true){
  $("#detailCategory").textContent=x.category||"未分类";
  $("#detailEra").textContent=x.era||"未填写";
  $("#detailType").textContent=x.type||"未填写";
+ $("#detailArtist").textContent=x.artist||"未填写";
  $("#detailInstitution").textContent=x.institution||"未填写";
+ $("#detailSourceSite").textContent=x.source_site||"未填写";
  $("#detailFocus").textContent=x.focus||"未填写";
  $("#detailNote").textContent=x.note||"";
  $("#detailTags").innerHTML=(x.tags||[]).map(t=>'<span class="chip">'+esc(t)+'</span>').join("");
