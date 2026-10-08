@@ -23,7 +23,19 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 .card-actions{display:flex;gap:6px;margin-top:10px}.mini{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 8px;font-size:12px}.empty{text-align:center;padding:80px;color:var(--muted);border:1px dashed var(--line);border-radius:14px}
 .modal{position:fixed;inset:0;background:rgba(20,18,15,.78);z-index:100;display:none;align-items:center;justify-content:center;padding:24px}.modal.show{display:flex}.modalbox{width:min(700px,96vw);max-height:92vh;background:var(--panel);border-radius:16px;overflow:auto;padding:24px;position:relative}.close{position:absolute;right:14px;top:12px;border:0;background:#fff;border-radius:50%;width:36px;height:36px;font-size:22px}
 .formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}label{font-size:12px;color:var(--muted);display:block;margin-bottom:5px}.modalbox input,.modalbox select,.modalbox textarea{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px}.modalbox textarea{min-height:90px}.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}.preview{max-width:100%;max-height:420px;display:block;margin:auto}.syncdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#45a35a;margin-right:6px}
-@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{position:static}.thumb{height:180px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}}
+.detail-page{display:none}
+.detail-page.show{display:block}
+.detail-shell{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(320px,.8fr);gap:24px}
+.detail-image-wrap{background:#201f1c;border-radius:14px;min-height:520px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.detail-image-wrap img{max-width:100%;max-height:76vh;object-fit:contain}
+.detail-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;height:fit-content}
+.detail-panel h2{margin:0 0 14px;font-size:24px;line-height:1.35}
+.detail-kv{display:grid;grid-template-columns:88px 1fr;gap:8px 12px;font-size:14px;line-height:1.6;margin-top:14px}
+.detail-kv .k{color:var(--muted)}
+.detail-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.detail-back{margin-bottom:14px}
+.thumb,.meta h3{cursor:pointer}
+@media(max-width:900px){.layout{grid-template-columns:1fr}.sidebar{position:static}.thumb{height:180px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}.detail-shell{grid-template-columns:1fr}.detail-image-wrap{min-height:320px}}
 </style>
 </head>
 <body>
@@ -43,8 +55,33 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <aside class="sidebar"><div class="side-title">参考大类</div><div id="categories"></div></aside>
 <main class="main">
 <div class="notice">图库数据已改为云端共享：任意设备打开同一网址都会看到同一套分类与参考。登录后可新增、修改、删除；图片可直接上传。</div>
+<div id="listView">
 <div class="section-head"><h2 id="currentTitle">全部参考</h2><div class="stats" id="stats"></div></div>
 <div class="grid" id="grid"></div>
+</div>
+<div class="detail-page" id="detailPage">
+  <button class="btn secondary detail-back" id="detailBackBtn">← 返回图库</button>
+  <div class="detail-shell">
+    <div class="detail-image-wrap"><img id="detailImage" alt=""></div>
+    <div class="detail-panel">
+      <h2 id="detailTitle"></h2>
+      <div class="detail-kv">
+        <div class="k">大类</div><div id="detailCategory"></div>
+        <div class="k">年代</div><div id="detailEra"></div>
+        <div class="k">类型</div><div id="detailType"></div>
+        <div class="k">来源机构</div><div id="detailInstitution"></div>
+        <div class="k">绘制重点</div><div id="detailFocus"></div>
+        <div class="k">说明</div><div id="detailNote"></div>
+      </div>
+      <div class="detail-tags" id="detailTags"></div>
+      <div class="card-actions" style="margin-top:18px">
+        <a class="btn secondary" id="detailSource" target="_blank" rel="noopener">查看来源页 ↗</a>
+        <button class="btn secondary editorOnly" id="detailEditBtn" style="display:none">编辑</button>
+        <button class="btn danger editorOnly" id="detailDeleteBtn" style="display:none">删除</button>
+      </div>
+    </div>
+  </div>
+</div>
 </main></div>
 
 <div class="modal" id="authModal"><div class="modalbox">
@@ -82,9 +119,6 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <div class="actions"><button class="btn" id="saveItem">保存</button></div>
 </div></div>
 
-<div class="modal" id="viewModal"><div class="modalbox">
-<button class="close" data-close="viewModal">×</button><img id="viewImage" class="preview"><h2 id="viewTitle"></h2><div id="viewMeta" class="line"></div><p id="viewNote"></p><a id="viewSource" target="_blank" rel="noopener">查看来源页 ↗</a>
-</div></div>
 
 <script>
 const SUPABASE_URL="https://otaokoencpoanxjjuqzv.supabase.co";
@@ -106,7 +140,7 @@ async function loadAll(){
  ]);
  if(ce||re){console.error(ce||re);return}
  categories=c||[];refs=(r||[]).map(x=>({...x,category:x.categories?.name||"其他"}));
- fillFilters();renderCategories();render();
+ fillFilters();renderCategories();render();syncDetailFromHash();
 }
 function fillFilters(){
  const ev=$("#era").value,tv=$("#type").value;
@@ -142,13 +176,51 @@ function render(){
  if(!rows.length&&hasFilter){const b=$("#emptyClearBtn");if(b)b.onclick=clearFilters;}
  rows.forEach(x=>{
   const card=document.createElement("article");card.className="card";
-  card.innerHTML='<div class="thumb"><img loading="lazy" src="'+esc(x.image_url)+'"><span class="badge">'+esc(x.era||x.category)+'</span></div><div class="meta"><h3>'+esc(x.title)+'</h3><div class="line">'+esc(x.institution||"未填写来源")+'</div><div class="line">'+esc(x.type||x.category)+'</div><div class="chips">'+(x.tags||[]).slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join("")+'</div><div class="card-actions"><button class="mini view">查看</button>'+(user?'<button class="mini edit">编辑</button><button class="mini del">删除</button>':'')+'</div></div>';
-  card.querySelector(".view").onclick=()=>viewItem(x);
-  if(user){card.querySelector(".edit").onclick=()=>editItem(x);card.querySelector(".del").onclick=()=>deleteItem(x)}
+  card.innerHTML='<div class="thumb"><img loading="lazy" src="'+esc(x.image_url)+'"><span class="badge">'+esc(x.era||x.category)+'</span></div><div class="meta"><h3>'+esc(x.title)+'</h3><div class="line">'+esc(x.institution||"未填写来源")+'</div><div class="line">'+esc(x.type||x.category)+'</div><div class="chips">'+(x.tags||[]).slice(0,3).map(t=>'<span class="chip">'+esc(t)+'</span>').join("")+'</div><div class="card-actions">'+(user?'<button class="mini edit">编辑</button><button class="mini del">删除</button>':'')+'</div></div>';
+  card.querySelector(".thumb").onclick=()=>openDetailPage(x);
+  card.querySelector(".meta h3").onclick=()=>openDetailPage(x);
+  if(user){
+    card.querySelector(".edit").onclick=e=>{e.stopPropagation();editItem(x)};
+    card.querySelector(".del").onclick=e=>{e.stopPropagation();deleteItem(x)};
+  }
   $("#grid").appendChild(card);
  });
 }
-function viewItem(x){$("#viewImage").src=x.image_url;$("#viewTitle").textContent=x.title;$("#viewMeta").textContent=[x.category,x.era,x.type,x.institution,x.focus].filter(Boolean).join(" · ");$("#viewNote").textContent=x.note||"";$("#viewSource").href=x.source_url||x.image_url;openModal("viewModal")}
+function openDetailPage(x,updateHash=true){
+ if(!x)return;
+ $("#listView").style.display="none";
+ $("#detailPage").classList.add("show");
+ $("#detailImage").src=x.image_url||"";
+ $("#detailImage").alt=x.title||"";
+ $("#detailTitle").textContent=x.title||"未命名参考";
+ $("#detailCategory").textContent=x.category||"未分类";
+ $("#detailEra").textContent=x.era||"未填写";
+ $("#detailType").textContent=x.type||"未填写";
+ $("#detailInstitution").textContent=x.institution||"未填写";
+ $("#detailFocus").textContent=x.focus||"未填写";
+ $("#detailNote").textContent=x.note||"";
+ $("#detailTags").innerHTML=(x.tags||[]).map(t=>'<span class="chip">'+esc(t)+'</span>').join("");
+ $("#detailSource").href=x.source_url||x.image_url||"#";
+ $("#detailSource").style.display=(x.source_url||x.image_url)?"inline-block":"none";
+ $("#detailEditBtn").onclick=()=>editItem(x);
+ $("#detailDeleteBtn").onclick=()=>deleteItem(x);
+ if(updateHash) history.pushState(null,"","#ref="+encodeURIComponent(x.id));
+ window.scrollTo({top:0,behavior:"smooth"});
+}
+function closeDetailPage(updateHash=true){
+ $("#detailPage").classList.remove("show");
+ $("#listView").style.display="";
+ if(updateHash && location.hash.startsWith("#ref=")) history.pushState(null,"",location.pathname+location.search);
+}
+function syncDetailFromHash(){
+ const m=location.hash.match(/^#ref=(.+)$/);
+ if(!m){closeDetailPage(false);return}
+ const id=decodeURIComponent(m[1]);
+ const x=refs.find(r=>String(r.id)===String(id));
+ if(x) openDetailPage(x,false);
+}
+$("#detailBackBtn").onclick=()=>closeDetailPage(true);
+window.addEventListener("popstate",syncDetailFromHash);
 function clearForm(){["fTitle","fImage","fSource","fEra","fType","fInstitution","fFocus","fTags","fNote"].forEach(id=>$("#"+id).value="");$("#fFile").value=""}
 function editItem(x){editingId=x.id;$("#itemModalTitle").textContent="编辑参考";$("#fTitle").value=x.title||"";$("#fCategory").value=x.category_id;$("#fImage").value=x.image_url||"";$("#fSource").value=x.source_url||"";$("#fEra").value=x.era||"";$("#fType").value=x.type||"";$("#fInstitution").value=x.institution||"";$("#fFocus").value=x.focus||"";$("#fTags").value=(x.tags||[]).join(", ");$("#fNote").value=x.note||"";openModal("itemModal")}
 async function deleteItem(x){if(!confirm("确定删除“"+x.title+"”吗？"))return;const {error}=await db.from("references").delete().eq("id",x.id);if(error)alert(error.message)}
