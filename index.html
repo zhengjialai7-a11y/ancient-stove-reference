@@ -17,6 +17,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 .layout{max-width:1600px;width:100%;margin:auto;flex:1;min-height:0;display:grid;grid-template-columns:240px 1fr;grid-template-rows:minmax(0,1fr);gap:18px;padding:20px 22px;overflow:hidden}.sidebar{background:var(--sidebar);border:1px solid var(--line);border-radius:14px;padding:12px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #categories{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .side-title{font-size:12px;color:var(--muted);padding:4px 8px 10px}.cat{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;padding:10px;border-radius:9px;text-align:left}.cat:hover,.cat.active{background:#fff}.count{font-size:12px;color:var(--muted)}
+.cat-row{display:flex;align-items:center;gap:3px}.cat-row .cat{flex:1;min-width:0;gap:8px}.cat-row .cat>span:first-child{overflow-wrap:anywhere}.cat-rename{flex-shrink:0;border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:6px;font-size:12px;color:var(--muted)}.cat-rename:hover{color:var(--ink);background:#fff}
 .main{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-bottom:40px}.notice{background:#eef7ee;border:1px solid #bdd8bd;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:14px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.section-head h2{font-size:20px;margin:0}.stats,.status{font-size:12px;color:var(--muted)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:.18s;box-shadow:0 2px 10px rgba(0,0,0,.025)}.card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08)}
 .thumb{height:210px;overflow:hidden;background:#ddd;position:relative}.thumb img,.thumb canvas{width:100%;height:100%;object-fit:cover;display:block}.badge{position:absolute;top:10px;left:10px;background:rgba(30,27,22,.78);color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
@@ -141,8 +142,9 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 </div></div>
 
 <div class="modal" id="categoryModal"><div class="modalbox">
-<button class="close" data-close="categoryModal">×</button><h2>新增大类</h2>
-<label>大类名称</label><input id="newCategoryName" placeholder="例如：兵器、箱柜、交通工具">
+<button class="close" data-close="categoryModal">×</button><h2 id="categoryModalTitle">新增大类</h2>
+<label for="newCategoryName">大类名称</label><input id="newCategoryName" maxlength="60" placeholder="例如：兵器、箱柜、交通工具">
+<div class="status" id="categoryMsg" role="status" style="margin-top:12px"></div>
 <div class="actions"><button class="btn" id="saveCategory">保存</button></div>
 </div></div>
 
@@ -174,6 +176,7 @@ const APP_URL="https://zhengjialai7-a11y.github.io/ancient-stove-reference/";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
 let categories=[],refs=[],user=null,activeCategory="全部参考",editingId=null,currentDetailId=null;
+let editingCategoryId=null,categorySaving=false;
 
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function openModal(id){$("#"+id).classList.add("show")}function closeModal(id){$("#"+id).classList.remove("show")}
@@ -186,7 +189,9 @@ async function loadAll(){
    db.from("references").select("*,categories(id,name)").order("created_at",{ascending:false})
  ]);
  if(ce||re){console.error(ce||re);return}
+ const activeId=categories.find(x=>x.name===activeCategory)?.id;
  categories=c||[];refs=(r||[]).map(x=>({...x,category:x.categories?.name||"其他"}));
+ if(activeId)activeCategory=categories.find(x=>x.id===activeId)?.name||"全部参考";
  fillFilters();renderCategories();render();syncDetailFromHash();
 }
 function fillFilters(){
@@ -197,14 +202,20 @@ function fillFilters(){
  [...new Set(refs.map(x=>x.sub_category).filter(Boolean))].sort().forEach(v=>$("#subCategoryFilter").add(new Option(v,v)));
  [...new Set(refs.map(x=>x.source_site).filter(Boolean))].sort().forEach(v=>$("#sourceSite").add(new Option(v,v)));
  $("#era").value=ev;$("#type").value=tv;$("#subCategoryFilter").value=subv;$("#sourceSite").value=sv;
+ const selectedCategory=$("#fCategory").value;
  $("#fCategory").innerHTML="";categories.forEach(c=>$("#fCategory").add(new Option(c.name,c.id)));
+ if(categories.some(c=>c.id===selectedCategory))$("#fCategory").value=selectedCategory;
 }
 function renderCategories(){
  const box=$("#categories"),scrollTop=box.scrollTop;box.innerHTML="";
  ["全部参考",...categories.map(c=>c.name)].forEach(name=>{
    const n=name==="全部参考"?refs.length:refs.filter(x=>x.category===name).length;
    const b=document.createElement("button");b.className="cat"+(name===activeCategory?" active":"");
-   b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';b.onclick=()=>{activeCategory=name;sanitizeSearch();closeDetailPage(true);renderCategories();render();$(".main").scrollTo({top:0})};box.appendChild(b);
+   b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';b.onclick=()=>{activeCategory=name;sanitizeSearch();closeDetailPage(true);renderCategories();render();$(".main").scrollTo({top:0})};
+   const row=document.createElement("div");row.className="cat-row";row.appendChild(b);
+   const category=categories.find(c=>c.name===name);
+   if(user&&category){const edit=document.createElement("button");edit.className="cat-rename";edit.textContent="改名";edit.type="button";edit.setAttribute("aria-label","修改“"+name+"”分类名称");edit.onclick=()=>openCategoryModal(category);row.appendChild(edit)}
+   box.appendChild(row);
  });
  box.scrollTop=scrollTop;
 }
@@ -482,18 +493,40 @@ async function saveItem(){
    closeModal("itemModal");editingId=null;clearForm();await loadAll();
  }catch(e){$("#saveMsg").textContent="保存失败："+e.message}
 }
+function openCategoryModal(category=null){
+ if(!user)return;
+ editingCategoryId=category?.id||null;
+ $("#categoryModalTitle").textContent=category?"修改分类名称":"新增大类";
+ $("#newCategoryName").value=category?.name||"";$("#categoryMsg").textContent="";
+ openModal("categoryModal");$("#newCategoryName").focus();
+}
 async function saveCategory(){
- const name=$("#newCategoryName").value.trim();if(!name)return;
- const max=categories.reduce((m,c)=>Math.max(m,c.sort_order||0),0);
- const {error}=await db.from("categories").insert({name,sort_order:max+10,created_by:user.id});
- if(error)return alert(error.message);$("#newCategoryName").value="";closeModal("categoryModal");await loadAll();
+ if(categorySaving)return;
+ if(!user){$("#categoryMsg").textContent="请先登录后再保存";return}
+ const name=$("#newCategoryName").value.trim(),id=editingCategoryId;
+ if(!name||name.length>60){$("#categoryMsg").textContent="请输入 1–60 个字符的分类名称";return}
+ if(name==="全部参考"||categories.some(c=>c.id!==id&&c.name===name)){$("#categoryMsg").textContent="此分类名称已存在，请换一个名称";return}
+ const existing=id?categories.find(c=>c.id===id):null;
+ if(id&&!existing){$("#categoryMsg").textContent="该分类已不存在，请刷新后重试";return}
+ if(existing?.name===name){closeModal("categoryModal");return}
+ categorySaving=true;$("#saveCategory").disabled=true;$("#categoryMsg").textContent="正在保存…";
+ try{
+   let result;
+   if(id)result=await db.from("categories").update({name}).eq("id",id).eq("name",existing.name).select("id,name").single();
+   else{const max=categories.reduce((m,c)=>Math.max(m,c.sort_order||0),0);result=await db.from("categories").insert({name,sort_order:max+10,created_by:user.id}).select("id,name").single()}
+   if(result.error)throw result.error;
+   if(id&&activeCategory===existing.name)activeCategory=name;
+   if(id){categories=categories.map(c=>c.id===id?{...c,name}:c);refs=refs.map(r=>r.category_id===id?{...r,category:name,categories:{...r.categories,name}}:r)}
+   closeModal("categoryModal");editingCategoryId=null;await loadAll();
+ }catch(e){$("#categoryMsg").textContent=e.code==="23505"?"此分类名称已存在，请换一个名称":e.code==="PGRST116"?"分类已被其他协作者修改，请刷新后重试":"保存失败："+e.message}
+ finally{categorySaving=false;$("#saveCategory").disabled=false}
 }
 async function refreshAuth(){
  const {data:{session}}=await db.auth.getSession();user=session?.user||null;
  $(".editorOnly");document.querySelectorAll(".editorOnly").forEach(el=>el.style.display=user?"inline-block":"none");
  $("#authBtn").textContent=user?"退出登录":"登录";
  $("#userStatus").textContent=user?"已登录："+user.email:"当前为只读模式；登录后可协作编辑";
- render();
+ renderCategories();render();
 }
 $("#authBtn").onclick=async()=>{if(user){await db.auth.signOut();await refreshAuth()}else openModal("authModal")};
 $("#loginBtn").onclick=async()=>{const email=$("#authEmail").value.trim(),password=$("#authPassword").value;const {error}=await db.auth.signInWithPassword({email,password});$("#authMsg").textContent=error?error.message:"登录成功";if(!error){closeModal("authModal");await refreshAuth()}};
@@ -523,7 +556,7 @@ $("#resendBtn").onclick=async()=>{
  const {error}=await db.auth.resend({type:"signup",email,options:{emailRedirectTo:APP_URL}});
  $("#authMsg").textContent=error?authErrorText(error):"确认邮件已重新发送，请使用最新一封邮件里的链接";
 };
-$("#addCategoryBtn").onclick=()=>openModal("categoryModal");
+$("#addCategoryBtn").onclick=()=>openCategoryModal();
 $("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
 $("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
 ["q","era","type","subCategoryFilter","sourceSite"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
