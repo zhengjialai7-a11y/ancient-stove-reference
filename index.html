@@ -17,7 +17,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 .layout{max-width:1600px;width:100%;margin:auto;flex:1;min-height:0;display:grid;grid-template-columns:240px 1fr;grid-template-rows:minmax(0,1fr);gap:18px;padding:20px 22px;overflow:hidden}.sidebar{background:var(--sidebar);border:1px solid var(--line);border-radius:14px;padding:12px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #categories{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .side-title{font-size:12px;color:var(--muted);padding:4px 8px 10px}.cat{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;padding:10px;border-radius:9px;text-align:left}.cat:hover,.cat.active{background:#fff}.count{font-size:12px;color:var(--muted)}
-.cat-row{display:flex;align-items:center;gap:3px}.cat-row .cat{flex:1;min-width:0;gap:8px}.cat-row .cat>span:first-child{overflow-wrap:anywhere}.cat-rename{flex-shrink:0;border:1px solid var(--line);background:var(--panel);border-radius:7px;padding:6px;font-size:12px;color:var(--muted)}.cat-rename:hover{color:var(--ink);background:#fff}
+.cat-row{display:flex;align-items:center}.cat-row .cat{flex:1;min-width:0;gap:8px}.cat-row .cat>span:first-child{overflow-wrap:anywhere}
 .main{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-bottom:40px}.notice{background:#eef7ee;border:1px solid #bdd8bd;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:14px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.section-head h2{font-size:20px;margin:0}.stats,.status{font-size:12px;color:var(--muted)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:.18s;box-shadow:0 2px 10px rgba(0,0,0,.025)}.card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08)}
 .thumb{height:210px;overflow:hidden;background:#ddd;position:relative}.thumb img,.thumb canvas{width:100%;height:100%;object-fit:cover;display:block}.badge{position:absolute;top:10px;left:10px;background:rgba(30,27,22,.78);color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
@@ -68,6 +68,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <button class="btn secondary" id="authBtn">登录</button>
 <button class="btn secondary editorOnly" id="addCategoryBtn" style="display:none">＋ 新增大类</button>
 <button class="btn editorOnly" id="addItemBtn" style="display:none">＋ 新增参考</button>
+<button class="btn secondary editorOnly" id="renameCategoryBtn" style="display:none" type="button">分类改名</button>
 </div></div><div class="status" id="userStatus"></div></div></header>
 
 <div class="layout">
@@ -143,6 +144,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 
 <div class="modal" id="categoryModal"><div class="modalbox">
 <button class="close" data-close="categoryModal">×</button><h2 id="categoryModalTitle">新增大类</h2>
+<div id="renameCategorySelectWrap" style="display:none;margin-bottom:12px"><label for="renameCategorySelect">选择需要改名的大类</label><select id="renameCategorySelect"></select></div>
 <label for="newCategoryName">大类名称</label><input id="newCategoryName" maxlength="60" placeholder="例如：兵器、箱柜、交通工具">
 <div class="status" id="categoryMsg" role="status" style="margin-top:12px"></div>
 <div class="actions"><button class="btn" id="saveCategory">保存</button></div>
@@ -213,8 +215,6 @@ function renderCategories(){
    const b=document.createElement("button");b.className="cat"+(name===activeCategory?" active":"");
    b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';b.onclick=()=>{activeCategory=name;sanitizeSearch();closeDetailPage(true);renderCategories();render();$(".main").scrollTo({top:0})};
    const row=document.createElement("div");row.className="cat-row";row.appendChild(b);
-   const category=categories.find(c=>c.name===name);
-   if(user&&category){const edit=document.createElement("button");edit.className="cat-rename";edit.textContent="改名";edit.type="button";edit.setAttribute("aria-label","修改“"+name+"”分类名称");edit.onclick=()=>openCategoryModal(category);row.appendChild(edit)}
    box.appendChild(row);
  });
  box.scrollTop=scrollTop;
@@ -494,8 +494,12 @@ async function saveItem(){
  }catch(e){$("#saveMsg").textContent="保存失败："+e.message}
 }
 function openCategoryModal(category=null){
- if(!user)return;
+ if(!user||categorySaving)return;
  editingCategoryId=category?.id||null;
+ $("#renameCategorySelectWrap").style.display=category?"block":"none";
+ const picker=$("#renameCategorySelect");picker.innerHTML="";
+ categories.forEach(c=>picker.add(new Option(c.name,c.id)));
+ if(category)picker.value=category.id;
  $("#categoryModalTitle").textContent=category?"修改分类名称":"新增大类";
  $("#newCategoryName").value=category?.name||"";$("#categoryMsg").textContent="";
  openModal("categoryModal");$("#newCategoryName").focus();
@@ -557,6 +561,8 @@ $("#resendBtn").onclick=async()=>{
  $("#authMsg").textContent=error?authErrorText(error):"确认邮件已重新发送，请使用最新一封邮件里的链接";
 };
 $("#addCategoryBtn").onclick=()=>openCategoryModal();
+$("#renameCategoryBtn").onclick=()=>{const category=categories.find(c=>c.name===activeCategory)||categories[0];if(category)openCategoryModal(category)};
+$("#renameCategorySelect").onchange=()=>{const category=categories.find(c=>c.id===$("#renameCategorySelect").value);if(category)openCategoryModal(category)};
 $("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
 $("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
 ["q","era","type","subCategoryFilter","sourceSite"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
