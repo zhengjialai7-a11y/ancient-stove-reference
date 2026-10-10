@@ -151,7 +151,7 @@ const $=id=>document.getElementById(id);
 const btoaSafe=s=>String(s||"").replace(/[<>&"']/g,"");
 let user=null, master=null, masterImg=null, selectedFile=null, fileObjectURL=null;
 let sourceWidth=0,sourceHeight=0, zoomBase=1, rectangle=null, dragStart=null;
-let pendingCropSave=Promise.resolve(), cropSaveFailed=false, cropSaveSeq=0;
+let pendingCropSave=Promise.resolve(), cropSaveFailed=false, cropSaveSeq=0, metaSaveTimer=null;
 let cats=[], originalRefs=[], drafts=[], selectedCrop=null, busy=false, zipData=null, zipFiles=[];
 const formatBytes=n=>n>1024*1024?(n/1048576).toFixed(2)+" MB":Math.round(n/1024)+" KB";
 function message(text,kind=""){const s=$("status");s.className=kind;s.textContent=text;
@@ -166,6 +166,29 @@ function checkRect(){if(!rectangle || !sourceWidth || !sourceHeight)return false
 function syncRectFields(){for(const k of ["x","y","w","h"])$(k).value=rectangle?.[k]??0;drawSelection();}
 function drawSelection(){const el=$("selection");if(!checkRect()){el.style.display="none";return;}el.style.display="block";el.style.left=(rectangle.x/sourceWidth*100)+"%";el.style.top=(rectangle.y/sourceHeight*100)+"%";el.style.width=(rectangle.w/sourceWidth*100)+"%";el.style.height=(rectangle.h/sourceHeight*100)+"%";}
 function setRectangle(r){rectangle=r?{x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.w),h:Math.round(r.h)}:null;syncRectFields();}
+function scheduleCropMetadataSave(){
+ if(metaSaveTimer)clearTimeout(metaSaveTimer);
+ if(!selectedCrop||!master)return;
+ $("autoSaveState").textContent="参考标题/分类修改中，等待自动保存…";
+ metaSaveTimer=setTimeout(()=>{metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});},450);
+}
+function autoSaveCropMetadata(){
+ if(!selectedCrop||!master)return Promise.resolve();
+ const id=selectedCrop,masterId=master.id,seq=++cropSaveSeq,feedback=$("autoSaveState");
+ const data={title:$("cropTitle").value.trim(),category_id:$("category").value,
+ sub_category:$("subCategory").value.trim()||null,target_reference_id:$("target").value||null,
+ updated_at:new Date().toISOString()};
+ if(!data.title||!data.category_id){cropSaveFailed=true;feedback.textContent="标题及参考大类不能为空，未保存；请填写完整";return Promise.reject(Error("标题及分类不能为空"));}
+ feedback.textContent="正在保存参考标题及分类…";
+ pendingCropSave=pendingCropSave.catch(()=>{}).then(async()=>{
+  const {data:updated,error}=await db.from("artwork_crops").update(data)
+   .eq("id",id).eq("master_id",masterId).eq("status","draft").select("id");
+  if(error||!updated?.length)throw Error(error?.message||"修改没有保存");
+  const d=drafts.find(x=>x.id===id);if(d)Object.assign(d,data);
+  if(seq===cropSaveSeq){cropSaveFailed=false;feedback.textContent="参考标题及分类已自动保存到对应草稿";renderDrafts();loadCropHistory(id);}
+ }).catch(e=>{cropSaveFailed=true;feedback.textContent="文字字段保存失败："+e.message+"；请勿发布";throw e;});
+ return pendingCropSave;
+}
 function autoSaveCropRange(){
  if(!selectedCrop||!master||!checkRect())return Promise.resolve();
  const id=selectedCrop,masterId=master.id,rect={...rectangle},seq=++cropSaveSeq;
@@ -265,14 +288,14 @@ async function loadCropHistory(cropId){
  if(base&&latest&&changes.length){const area1=base.w*base.h,area2=latest.w*latest.h;const delta=Math.round((area2/area1-1)*100);summary+=" · 相对初始面积："+(delta>=0?"+":"")+delta+"%";}
  box.textContent=summary;
 }
-function openCrop(c){if(selectedCrop!==c.id&&cropSaveFailed){alert("上一处裁切保存失败，请先重试保存再切换");return;}selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";$("autoSaveState").textContent=c.status==="draft"?"已选择「"+c.title+"」，重新框选后自动保存到此记录。":"此参考已经发布；不能通过草稿自动修改。";renderDrafts();if(c.status==="draft")loadCropHistory(c.id);else $("editHistory").textContent="这条参考已经发布；点击其他待审核草稿查看编辑记录。";}
+function openCrop(c){if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}if(selectedCrop!==c.id&&cropSaveFailed){alert("上一处裁切保存失败，请先重试保存再切换");return;}selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";$("autoSaveState").textContent=c.status==="draft"?"已选择「"+c.title+"」，重新框选后自动保存到此记录。":"此参考已经发布；不能通过草稿自动修改。";renderDrafts();if(c.status==="draft")loadCropHistory(c.id);else $("editHistory").textContent="这条参考已经发布；点击其他待审核草稿查看编辑记录。";}
 function renderDrafts(){const list=$("cropItems");list.replaceChildren();if(!drafts.length){const p=document.createElement("p");p.className="muted";p.textContent="尚无局部。先框选范围并保存草稿。";list.append(p);return;}
 drafts.forEach(c=>{const row=document.createElement("div");row.className="crop-card"+(selectedCrop===c.id?" sel":"");
 const left=document.createElement("div");const name=document.createElement("b");name.textContent=c.title;const meta=document.createElement("small");meta.textContent=c.x+","+c.y+" · "+c.w+"×"+c.h+" px · "+(c.target_reference_id?"替换旧参考":"新增参考");left.append(name,meta);
 const actions=document.createElement("div");actions.className="flex";
 const pill=document.createElement("span");pill.className="pill"+(c.status==="published"?" done":"");pill.textContent=c.status==="published"?"已发布":"草稿";
 const pick=document.createElement("button");pick.className="small secondary";pick.textContent="查看";pick.onclick=()=>openCrop(c);actions.append(pill,pick);
-if(c.status==="draft"){const del=document.createElement("button");del.className="small secondary";del.textContent="删除";del.onclick=async()=>{if(!confirm("删除这条裁切草稿？"))return;const {error}=await db.from("artwork_crops").delete().eq("id",c.id);if(error)return message(error.message,"err");if(selectedCrop===c.id)selectedCrop=null;await loadDrafts();};const pub=document.createElement("button");pub.className="small";pub.textContent="审核发布";pub.onclick=async()=>{if(!confirm("确定已审核清晰度、范围及分类，并发布“"+c.title+"”？"))return;pub.disabled=true;try{await pendingCropSave;if(cropSaveFailed)throw Error("裁切自动保存失败，禁止发布");const {data,error}=await db.rpc("publish_artwork_crop",{p_crop_id:c.id});if(error)throw error;await loadDrafts();message("发布成功，参考ID："+data+"。旧图已在数据库中备份（如有替换）。","ok");}catch(e){message("发布失败："+e.message,"err");}finally{pub.disabled=false;}};actions.append(del,pub);}
+if(c.status==="draft"){const del=document.createElement("button");del.className="small secondary";del.textContent="删除";del.onclick=async()=>{if(!confirm("删除这条裁切草稿？"))return;const {error}=await db.from("artwork_crops").delete().eq("id",c.id);if(error)return message(error.message,"err");if(selectedCrop===c.id)selectedCrop=null;await loadDrafts();};const pub=document.createElement("button");pub.className="small";pub.textContent="审核发布";pub.onclick=async()=>{if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}pub.disabled=true;try{await pendingCropSave;if(cropSaveFailed)throw Error("有修改未能自动保存，禁止发布");if(!confirm("确定已审核清晰度、范围及分类，并发布这条最新草稿？"))return;const {data,error}=await db.rpc("publish_artwork_crop",{p_crop_id:c.id});if(error)throw error;await loadDrafts();message("发布成功，参考ID："+data+"。旧图已在数据库中备份（如有替换）。","ok");}catch(e){message("发布失败："+e.message,"err");}finally{pub.disabled=false;}};actions.append(del,pub);}
 row.append(left,actions);list.append(row);});}
 $("applyPreset").onclick=async()=>{if(!master||busy)return;const b=$("applyPreset");b.disabled=true;try{
  const response=await fetch("./presets/huolangtu.json",{cache:"no-cache"});if(!response.ok)throw Error("无法加载已确认裁切清单");
@@ -292,7 +315,9 @@ $("applyPreset").onclick=async()=>{if(!master||busy)return;const b=$("applyPrese
  const {error}=await db.from("artwork_crops").insert(rows);if(error)throw error;
  await loadDrafts();message("已导入"+rows.length+"条《货郎图》原像素裁切草稿。逐条检查后点「审核发布」。","ok");
  }catch(e){message("裁切清单导入失败："+e.message,"err");}finally{b.disabled=false;}};
-$("newCrop").onclick=()=>{if(cropSaveFailed)return alert("上一处裁切保存失败，请重新框选或保存");selectedCrop=null;setRectangle(null);$("cropTitle").value="";$("subCategory").value="";$("target").value="";renderDrafts();};
+for(const id of ["cropTitle","subCategory"]){$(id).addEventListener("input",scheduleCropMetadataSave);$(id).addEventListener("change",scheduleCropMetadataSave);}
+for(const id of ["category","target"]){$(id).addEventListener("change",scheduleCropMetadataSave);}
+$("newCrop").onclick=()=>{if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}if(cropSaveFailed)return alert("上一处裁切保存失败，请重新框选或保存");selectedCrop=null;setRectangle(null);$("cropTitle").value="";$("subCategory").value="";$("target").value="";renderDrafts();};
 $("saveCrop").onclick=async()=>{if(busy)return;setBusy(true);try{if(!master)throw Error("请先上传或选择母图");if(!checkRect())throw Error("裁切超出母图边界或尺寸为空");const title=$("cropTitle").value.trim(),category_id=$("category").value;if(!title||!category_id)throw Error("请填写参考标题和分类");const payload={master_id:master.id,title,category_id,sub_category:$("subCategory").value.trim()||null,x:rectangle.x,y:rectangle.y,w:rectangle.w,h:rectangle.h,target_reference_id:$("target").value||null,updated_at:new Date().toISOString()};
 if(selectedCrop){const {error}=await db.from("artwork_crops").update(payload).eq("id",selectedCrop).eq("status","draft");if(error)throw error;}else{const {data,error}=await db.from("artwork_crops").insert(payload).select("id").single();if(error)throw error;selectedCrop=data.id;}
 await loadDrafts();message("裁切草稿已保存。尚未修改正式图库，审核后才发布。","ok");
