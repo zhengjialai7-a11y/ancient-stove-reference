@@ -87,6 +87,7 @@ code{font-size:12px;word-break:break-all}
 <label for="sourceUrl">原始来源网页</label><input id="sourceUrl" type="url" placeholder="https://g2.ltfc.net/view/...">
 <div class="flex" style="margin-top:14px"><button id="upload" disabled>上传高清母图（原字节）</button></div>
 <progress id="uploadProgress" max="100" value="0"></progress>
+<div id="uploadResult" role="status" aria-live="polite" style="margin-top:10px;padding:10px;border-radius:9px;background:#f0ece3;border:1px solid #ded8cc;font-size:13px;line-height:1.65">选择高清原图后，点击「上传高清母图」，这里会显示校验结果。</div>
 <p class="muted">图片大于6MB会使用 TUS 断点续传。上传的是原文件字节，不经过画布缩放或重新编码。</p>
 </section>
 <section>
@@ -150,7 +151,13 @@ let user=null, master=null, masterImg=null, selectedFile=null, fileObjectURL=nul
 let sourceWidth=0,sourceHeight=0, zoomBase=1, rectangle=null, dragStart=null;
 let cats=[], originalRefs=[], drafts=[], selectedCrop=null, busy=false, zipData=null, zipFiles=[];
 const formatBytes=n=>n>1024*1024?(n/1048576).toFixed(2)+" MB":Math.round(n/1024)+" KB";
-function message(text,kind=""){const s=$("status");s.className=kind;s.textContent=text;}
+function message(text,kind=""){const s=$("status");s.className=kind;s.textContent=text;
+ if(/上传|SHA-256|校验|云端|文件|母图|原图/.test(text)){
+   const p=$("uploadResult");p.textContent=text;
+   p.style.background=kind==="err"?"#fff0ec":kind==="ok"?"#ebf7ef":"#faf4e7";
+   p.style.borderColor=kind==="err"?"#e8bcb3":kind==="ok"?"#badbc6":"#cfbda5";
+ }
+}
 function setBusy(v){busy=v; $("upload").disabled=v||!selectedFile||!user;$("saveCrop").disabled=v||!master||!user;}
 function checkRect(){if(!rectangle || !sourceWidth || !sourceHeight)return false;const r=rectangle;return [r.x,r.y,r.w,r.h].every(Number.isInteger)&&r.x>=0&&r.y>=0&&r.w>0&&r.h>0&&r.x+r.w<=sourceWidth&&r.y+r.h<=sourceHeight;}
 function syncRectFields(){for(const k of ["x","y","w","h"])$(k).value=rectangle?.[k]??0;drawSelection();}
@@ -200,7 +207,7 @@ async function verifyRemoteOriginal(file,path,expectedHash){
  return remoteHash;
 }
 async function fetchMasters(selectId){const {data,error}=await db.from("artwork_masters").select("*").order("created_at",{ascending:false}).limit(150);if(error)throw error;const box=$("masterList"),selected=selectId||box.value;box.replaceChildren(new Option("选择之前上传的母图",""));for(const m of data||[])box.add(new Option(m.title+" ("+m.original_width+"×"+m.original_height+")",m.id));if(selected&&data?.some(m=>m.id===selected))box.value=selected;return data||[];}
-$("upload").onclick=async()=>{if(busy)return;setBusy(true);try{if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
+$("upload").onclick=async()=>{if(busy)return;setBusy(true);message("正在准备上传及验证高清母图…");try{if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
 const {data:old,error:lookupError}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupError)throw lookupError;
 if(old){message("发现相同母图，正在回读云端原文件校验 SHA-256…");await verifyRemoteOriginal(selectedFile,old.storage_path,hash);await fetchMasters(old.id);await selectMaster(old);message("无损校验通过：本地与云端 SHA-256 完全一致，已复用母图。","ok");return;}
 const ext=selectedFile.type==="image/png"?"png":selectedFile.type==="image/webp"?"webp":"jpg";
