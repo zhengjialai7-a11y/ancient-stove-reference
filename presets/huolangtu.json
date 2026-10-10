@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "title": "货郎图",
+  "source_url": "https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362",
+  "sha256": "9894f41227243f9c949058b93947527e6c1ceed11217fbc234d137adad7d5af7",
+  "dimensions": [
+    5500,
+    6500
+  ],
+  "note": "2026-10-10 用户提供高清原图，6处均为原图原生像素坐标。此清单仅初始化待审核裁切，不自动发布。",
+  "crops": [
+    {
+      "title": "《货郎图》·伞形货架及悬挂货物",
+      "subcategory": "伞形货架及悬挂货物",
+      "rect": [
+        1640,
+        120,
+        2970,
+        1690
+      ],
+      "category_id": "40afced7-635d-414d-bad0-79c5caf565fe",
+      "target_id": "0dc6ce0d-fb06-5162-951c-8a1d94238226"
+    },
+    {
+      "title": "《货郎图》·货担框格与卷曲边饰",
+      "subcategory": "货担框格与卷曲边饰",
+      "rect": [
+        2440,
+        2920,
+        1520,
+        1090
+      ],
+      "category_id": "79ccd1eb-d72b-4776-9457-03b991eb9e5e",
+      "target_id": "97f2879f-5ec4-5391-a7db-193a56d667b7"
+    },
+    {
+      "title": "《货郎图》·多层框格货担",
+      "subcategory": "多层框格货担",
+      "rect": [
+        2380,
+        3500,
+        1720,
+        2070
+      ],
+      "category_id": "f52c420a-a470-43ea-ad5c-bfba8f317042",
+      "target_id": "62a0bd25-38e1-5d02-9b96-1577a76daf76"
+    },
+    {
+      "title": "《货郎图》·货担旁笼形器具",
+      "subcategory": "货担旁笼形器具",
+      "rect": [
+        3950,
+        2480,
+        1320,
+        2180
+      ],
+      "category_id": "40afced7-635d-414d-bad0-79c5caf565fe",
+      "target_id": "5732ad1d-9a9c-59a7-bc89-0aaca3c1dffe"
+    },
+    {
+      "title": "《货郎图》·货郎服饰与衣纹",
+      "subcategory": "货郎及孩童衣装",
+      "rect": [
+        1770,
+        1940,
+        1680,
+        3410
+      ],
+      "category_id": "5de5988b-7a43-4022-9482-eb1c5262d8ab",
+      "target_id": "98b59512-128c-5ce8-859b-57027fe552a8"
+    },
+    {
+      "title": "《货郎图》·孩童服饰与玩具",
+      "subcategory": "孩童服饰与玩具",
+      "rect": [
+        220,
+        4060,
+        1710,
+        2100
+      ],
+      "category_id": "5de5988b-7a43-4022-9482-eb1c5262d8ab",
+      "target_id": null
+    }
+  ]
+}
