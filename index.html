@@ -70,6 +70,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <select id="subCategoryFilter"><option value="">全部细分</option></select>
 <select id="sourceSite"><option value="">全部来源</option></select>
 <button class="btn secondary" id="authBtn">登录</button>
+<a class="btn secondary editorOnly" href="./importer.html" style="display:none;text-decoration:none">高清母图入库</a>
 <button class="btn secondary editorOnly" id="addCategoryBtn" style="display:none">＋ 新增大类</button>
 <button class="btn editorOnly" id="addItemBtn" style="display:none">＋ 新增参考</button>
 <button class="btn secondary editorOnly" id="renameCategoryBtn" style="display:none" type="button">分类改名</button>
@@ -86,6 +87,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <div class="detail-page" id="detailPage">
   <div class="detail-actions">
     <button class="btn secondary detail-back" id="detailBackBtn" type="button">← 返回图库</button>
+    <button class="btn secondary" id="downloadNativeCrop" type="button" style="display:none;margin-left:9px">下载原生像素 PNG</button>
   </div>
   <div class="detail-shell">
     <div class="detail-image-wrap" id="detailImageWrap">
@@ -425,9 +427,32 @@ function navigateDetail(step){
 $("#detailPrevBtn").onclick=e=>{e.stopPropagation();navigateDetail(-1)};
 $("#detailNextBtn").onclick=e=>{e.stopPropagation();navigateDetail(1)};
 
+async function downloadNativeCrop(x){
+ if(!hasCrop(x))return;
+ const btn=$("#downloadNativeCrop");btn.disabled=true;btn.textContent="正在生成原像素图片…";
+ try{
+   const img=new Image();img.crossOrigin="anonymous";
+   await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error("母图跨域读取失败，无法导出；请从来源链接下载原图"));img.src=x.image_url;});
+   const sx=Math.round(x.crop_x*img.naturalWidth),sy=Math.round(x.crop_y*img.naturalHeight);
+   const sw=Math.round(x.crop_w*img.naturalWidth),sh=Math.round(x.crop_h*img.naturalHeight);
+   if(sw<=0||sh<=0||sx<0||sy<0||sx+sw>img.naturalWidth||sy+sh>img.naturalHeight)throw new Error("原图裁切范围错误");
+   if(sw*sh>80000000)throw new Error("裁切区域过大，请在工作台缩小范围再下载");
+   const canvas=document.createElement("canvas");canvas.width=sw;canvas.height=sh;
+   const ctx=canvas.getContext("2d",{alpha:false});ctx.imageSmoothingEnabled=false;
+   ctx.drawImage(img,sx,sy,sw,sh,0,0,sw,sh);
+   const blob=await new Promise(ok=>canvas.toBlob(ok,"image/png"));
+   if(!blob)throw new Error("浏览器无法生成 PNG");
+   const link=document.createElement("a"),url=URL.createObjectURL(blob);
+   link.href=url;link.download=(x.title||"高清局部").replace(/[\\/:*?"<>|]/g,"_")+".png";link.click();
+   setTimeout(()=>URL.revokeObjectURL(url),3000);
+ }catch(e){alert("原像素下载失败："+e.message)}
+ finally{btn.disabled=false;btn.textContent="下载原生像素 PNG"}
+}
 function openDetailPage(x,updateHash=true){
  if(!x)return;
  const resetScroll=String(currentDetailId)!==String(x.id)||!$("#detailPage").classList.contains("show");
+ $("#downloadNativeCrop").style.display=hasCrop(x)?"inline-block":"none";
+ $("#downloadNativeCrop").onclick=()=>downloadNativeCrop(x);
  $("#listView").style.display="none";
  $("#detailPage").classList.add("show");
  if(hasCrop(x)){
