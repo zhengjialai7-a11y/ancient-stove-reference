@@ -45,6 +45,13 @@ button.small{font-size:12px;padding:7px 10px}
 #authBox input{width:170px}
 code{font-size:12px;word-break:break-all}
 .notice{background:#f2ece2;border-left:3px solid #b69a76;padding:12px;border-radius:7px;font-size:12px;line-height:1.7}
+.drop-zone{border:2px dashed #bcaa91;border-radius:12px;padding:22px 15px;background:#faf6ee;text-align:center;margin:12px 0;transition:background .15s,border-color .15s;cursor:pointer}
+.drop-zone.dragover{border-color:#316f57;background:#eaf6ed}
+.drop-zone b{display:block;margin-bottom:5px}
+.drop-zone .muted{margin-top:4px}
+.quicksteps{margin:0 0 12px;padding:11px 12px;background:#eef1ea;border-radius:8px;font-size:12px;line-height:1.8}
+.quicksteps a{color:var(--accent)}
+.file-verified{display:inline-block;background:#e0f3e5;padding:3px 8px;border-radius:6px;font-size:12px;color:#245c3c}
 @media(max-width:960px){.two{grid-template-columns:1fr}#stageViewport{height:55vh}header{padding:14px}main{padding:12px}.mini-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
@@ -63,11 +70,17 @@ code{font-size:12px;word-break:break-all}
 <div class="two" id="workPanel" hidden>
 <div>
 <section>
-<h2>① 选择高清母图</h2>
-<label for="file">原图 JPG / PNG / WebP，或装有原图的 ZIP</label>
+<h2>① 从浏览器直接导入原图</h2>
+<div class="quicksteps">① 在 <a id="openSourceSite" href="https://g2.ltfc.net/" target="_blank" rel="noopener noreferrer">中华珍宝馆 ↗</a> 使用网站提供的正常下载按钮，将<strong>原始 JPEG</strong>保存到电脑。<br>② 返回本页，直接拖入 JPG / PNG 文件或点击下方选择；<strong>无需 ZIP，不需要在聊天中转</strong>。<br>③ 查看真实像素尺寸和校验值，上传成功后即可拆分并审核入库。</div>
+<div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="点击选择或拖入高清原图">
+<b>将下载好的高清 JPG 拖到这里</b>
+<div class="muted">也可以点击此区域选择文件 · 原图直接上传 · 不会重新压缩</div>
+</div>
+<label for="file">选择本地原图 JPG / PNG / WebP（兼容 ZIP）</label>
 <input type="file" id="file" accept=".jpg,.jpeg,.png,.webp,.zip,image/jpeg,image/png,image/webp,application/zip">
 <div id="zipRow" hidden><label for="zipChoice">ZIP 内请选择要入库的原图</label><select id="zipChoice"></select></div>
 <div id="fileMeta" class="muted" style="margin-top:8px">尚未选择文件</div>
+<div class="muted" id="fileCheck" aria-live="polite"></div>
 <label for="workTitle">原作名称 *</label><input id="workTitle" placeholder="如：货郎图">
 <label for="author">作者</label><input id="author" placeholder="如：李公麟（传）">
 <label for="era">年代</label><input id="era" placeholder="如：北宋">
@@ -146,9 +159,21 @@ function setRectangle(r){rectangle=r?{x:Math.round(r.x),y:Math.round(r.y),w:Math
 function showSize(){const m=master;if(!m)return; $("currentMaster").textContent=m.title+" · "+m.original_width+" × "+m.original_height+" px · "+formatBytes(m.original_bytes)+" · SHA-256: "+m.sha256+" · "+m.status; $("publishNote").textContent="当前母图 "+m.title+"；草稿和已发布的参考单独列出。原图的云端文件不会因修改裁切而被重新编码。";}
 function applyZoom(){if(!masterImg||!sourceWidth)return;const viewport=$("stageViewport"),z=Number($("zoom").value),fit=Math.min(1,(viewport.clientWidth-24)/sourceWidth);zoomBase=fit;const width=Math.max(100,Math.round(sourceWidth*fit*z));$("stage").style.width=width+"px";$("zoomLabel").textContent=z===1?"适合屏幕":z.toFixed(2)+"×";drawSelection();}
 async function setImageUrl(url){const im=$("masterImage");im.crossOrigin="anonymous";await new Promise((resolve,reject)=>{im.onload=resolve;im.onerror=()=>reject(new Error("图片加载失败；请检查存储链接与访问权限"));im.src=url;});masterImg=im;sourceWidth=im.naturalWidth;sourceHeight=im.naturalHeight;$("blank").hidden=true;$("stageViewport").hidden=false;$("zoom").value="1";applyZoom();$("fullRect").disabled=false;$("downloadCrop").disabled=false;}
-async function loadFile(file){if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");selectedFile=file;fileObjectURL=URL.createObjectURL(file);await setImageUrl(fileObjectURL);master=null;selectedCrop=null;setRectangle(null);$("currentMaster").textContent="已读取本地图片，尚未上传";$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);if(/货郎图/.test(file.name)&&sourceWidth===5500&&sourceHeight===6500){if(!$("workTitle").value)$("workTitle").value="货郎图";if(!$("sourceUrl").value)$("sourceUrl").value="https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362";if(!$("author").value)$("author").value="李公麟";if(!$("era").value)$("era").value="北宋";}$("upload").disabled=!user;drafts=[];renderDrafts();message("原图已在浏览器读取。下一步填写作品信息并上传，不会调整原图片尺寸。","ok");}
+async function loadFile(file){$("fileCheck").textContent="正在读取原始文件…";if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");selectedFile=file;fileObjectURL=URL.createObjectURL(file);await setImageUrl(fileObjectURL);master=null;selectedCrop=null;setRectangle(null);$("currentMaster").textContent="已读取本地图片，尚未上传";$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);if(/货郎图/.test(file.name)&&sourceWidth===5500&&sourceHeight===6500){if(!$("workTitle").value)$("workTitle").value="货郎图";if(!$("sourceUrl").value)$("sourceUrl").value="https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362";if(!$("author").value)$("author").value="李公麟";if(!$("era").value)$("era").value="北宋";}$("upload").disabled=!user;drafts=[];renderDrafts();
+$("fileCheck").textContent="正在计算原文件 SHA-256…";
+try {const digest=await sha256(file);$("fileCheck").textContent="已核验本地原图 · SHA-256 "+digest+" · 原始文件将直接上传，不经 Canvas 重新编码";}catch(e){$("fileCheck").textContent="SHA-256 尚未完成："+e.message;}
+message("原图已在浏览器读取。下一步填写作品信息并上传，不会调整原图片尺寸。","ok");}
 async function zipSelected(){const n=$("zipChoice").value,entry=zipFiles.find(x=>x.name===n);if(!entry)return;const f=await entry.async("blob");if(f.size>250*1024*1024)throw Error("图片超过当前250MB单文件处理上限");const ext=entry.name.toLowerCase().split(".").pop();const type=ext==="png"?"image/png":ext==="webp"?"image/webp":"image/jpeg";await loadFile(new File([f],entry.name.split("/").pop(),{type}));}
-$("file").onchange=async e=>{try{const file=e.target.files?.[0];if(!file)return;if(/\.zip$/i.test(file.name)){if(!window.JSZip)throw Error("ZIP 解压组件未加载");zipData=await JSZip.loadAsync(file);zipFiles=Object.values(zipData.files).filter(z=>!z.dir&&/\.(jpe?g|png|webp)$/i.test(z.name)&&!z.name.startsWith("__MACOSX/"));if(!zipFiles.length)throw Error("ZIP 里没有 JPG、PNG 或 WebP");$("zipRow").hidden=false;$("zipChoice").replaceChildren();zipFiles.forEach(f=>$("zipChoice").add(new Option(f.name,f.name)));await zipSelected();}else{$("zipRow").hidden=true;await loadFile(file);}}catch(err){message(err.message,"err");}};
+async function chooseIncomingFile(file){try{if(!file)return;if(/\.zip$/i.test(file.name)){if(!window.JSZip)throw Error("ZIP 解压组件未加载");zipData=await JSZip.loadAsync(file);zipFiles=Object.values(zipData.files).filter(z=>!z.dir&&/\.(jpe?g|png|webp)$/i.test(z.name)&&!z.name.startsWith("__MACOSX/"));if(!zipFiles.length)throw Error("ZIP 里没有 JPG、PNG 或 WebP");$("zipRow").hidden=false;$("zipChoice").replaceChildren();zipFiles.forEach(f=>$("zipChoice").add(new Option(f.name,f.name)));await zipSelected();}else{$("zipRow").hidden=true;await loadFile(file);}}catch(err){$("fileCheck").textContent="";message(err.message,"err");}}
+$("file").onchange=e=>chooseIncomingFile(e.target.files?.[0]);
+const dropZone=$("dropZone");
+dropZone.addEventListener("click",()=>$("file").click());
+dropZone.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click();}});
+for(const eventName of ["dragenter","dragover"]){dropZone.addEventListener(eventName,e=>{e.preventDefault();e.stopPropagation();dropZone.classList.add("dragover");});}
+for(const eventName of ["dragleave","drop"]){dropZone.addEventListener(eventName,e=>{e.preventDefault();e.stopPropagation();dropZone.classList.remove("dragover");});}
+dropZone.addEventListener("drop",e=>{const file=e.dataTransfer?.files?.[0];if(file)chooseIncomingFile(file);});
+function updateSourceShortcut(){const input=$("sourceUrl").value.trim();$("openSourceSite").href=/^https:\/\/g2\.ltfc\.net\//.test(input)?input:"https://g2.ltfc.net/";}
+$("sourceUrl").addEventListener("input",updateSourceShortcut);
 $("zipChoice").onchange=async()=>{try{await zipSelected();}catch(e){message(e.message,"err");}};
 $("zoom").oninput=applyZoom;
 for(const key of ["x","y","w","h"]){$(key).addEventListener("input",()=>{const r=Object.fromEntries(["x","y","w","h"].map(k=>[k,Number($(k).value)]));rectangle=r;drawSelection();});}
@@ -187,7 +212,7 @@ message("高清母图上传并登记成功： "+saved.original_width+" × "+save
 async function selectMaster(m){master=m;selectedCrop=null;setRectangle(null);const url=storageUrl(m.storage_path);if(!(selectedFile&&fileObjectURL&&sourceWidth===m.original_width&&sourceHeight===m.original_height)){await setImageUrl(url);}else{const localHash=await sha256(selectedFile);if(localHash!==m.sha256)await setImageUrl(url);}
 if(sourceWidth!==m.original_width||sourceHeight!==m.original_height)throw Error("云端母图分辨率不符合登记数据");
 $("workTitle").value=m.title;$("author").value=m.author||"";$("era").value=m.era||"";$("sourceUrl").value=m.source_url||"";
-showSize();await loadCandidates();await loadDrafts();$("applyPreset").hidden=m.sha256!=="9894f41227243f9c949058b93947527e6c1ceed11217fbc234d137adad7d5af7";$("saveCrop").disabled=false;applyZoom();}
+showSize();updateSourceShortcut();await loadCandidates();await loadDrafts();$("applyPreset").hidden=m.sha256!=="9894f41227243f9c949058b93947527e6c1ceed11217fbc234d137adad7d5af7";$("saveCrop").disabled=false;applyZoom();}
 $("masterList").onchange=async()=>{try{const id=$("masterList").value;if(!id)return;const {data,error}=await db.from("artwork_masters").select("*").eq("id",id).single();if(error)throw error;await selectMaster(data);message("已恢复高清母图和全部裁切草稿。","ok");}catch(e){message(e.message,"err");}};
 async function loadCategories(){const {data,error}=await db.from("categories").select("id,name").order("sort_order");if(error)throw error;cats=data||[];const box=$("category");box.replaceChildren();cats.forEach(x=>box.add(new Option(x.name,x.id)));}
 async function loadCandidates(){const {data,error}=await db.from("references").select("id,title,work_title,source_url").eq("work_title",master.title).limit(200);if(error)throw error;const sourceId=(master.source_url||"").match(/[a-f0-9]{24}/i)?.[0]||null;originalRefs=(data||[]).filter(r=>r.work_title===master.title&&(r.source_url===master.source_url||(sourceId&&r.source_url?.includes(sourceId))||(!master.source_url&&!r.source_url)));const el=$("target");el.replaceChildren(new Option("新建一条参考（不覆盖旧图）",""));originalRefs.forEach(r=>el.add(new Option(r.title,r.id)));}
