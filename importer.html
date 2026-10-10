@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>高清母图工作台 · 美术绘制参考</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+:root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#282620;--sub:#766f64;--line:#ded8cc;--accent:#6f4c2f;--green:#316f57}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+header{background:#fffcf6;border-bottom:1px solid var(--line);padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:22px;margin:0}.muted{color:var(--sub);font-size:13px;line-height:1.65}
+header a{color:var(--accent);text-decoration:none}
+main{max-width:1480px;margin:auto;padding:24px}
+.two{display:grid;grid-template-columns:minmax(320px,360px) minmax(0,1fr);gap:18px;align-items:start}
+section{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:20px;margin-bottom:18px}
+h2{font-size:17px;margin:0 0 14px}h3{font-size:14px;margin:20px 0 8px}
+label{display:block;font-size:12px;color:var(--sub);margin:10px 0 4px}
+input,select,textarea{width:100%;font:inherit;font-size:14px;background:white;color:var(--ink);padding:10px;border:1px solid #cbc4b8;border-radius:9px;min-width:0}
+input[type="range"]{padding:3px}
+button{font:inherit;cursor:pointer;border-radius:9px;padding:10px 13px;border:1px solid var(--accent);color:white;background:var(--accent)}
+button.secondary{color:var(--accent);background:white}button:disabled{opacity:.45;cursor:not-allowed}
+button.small{font-size:12px;padding:7px 10px}
+.flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.flex>*{min-width:0}.flex>button{flex-shrink:0}
+.mini-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.mini-form label{margin-top:0}
+#status{padding:11px 14px;border-radius:9px;border:1px solid #cfbda5;background:#faf4e7;min-height:42px;margin-bottom:20px;font-size:13px;white-space:pre-wrap;line-height:1.6}
+#status.ok{background:#ebf7ef;border-color:#badbc6}#status.err{background:#fff0ec;border-color:#e8bcb3}
+#stageViewport{height:min(70vh,750px);min-height:350px;background:#222;overflow:auto;position:relative;border-radius:12px}
+#stage{position:relative;touch-action:none;user-select:none}
+#stage img{display:block;width:100%;height:auto;pointer-events:none;max-width:none}
+#selection{position:absolute;border:2px solid #f5d85e;background:#f5d85e33;box-shadow:0 0 0 1px #222;pointer-events:none;display:none}
+#blank{height:260px;background:#292824;color:#ddd;display:flex;align-items:center;justify-content:center;border-radius:12px}
+#cropItems{display:grid;gap:9px}
+.crop-card{border:1px solid var(--line);padding:12px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:white}
+.crop-card.sel{outline:2px solid #b89364}
+.crop-card b{font-size:13px}.crop-card small{display:block;color:var(--sub);margin-top:5px}
+.pill{background:#eee8dc;border-radius:16px;padding:4px 9px;font-size:11px;white-space:nowrap}
+.pill.done{background:#dcf0e4;color:#22553c}
+#uploadProgress{width:100%;height:11px;display:none}
+#authBox{display:flex;gap:8px;align-items:center;max-width:510px}
+#authBox input{width:170px}
+code{font-size:12px;word-break:break-all}
+.notice{background:#f2ece2;border-left:3px solid #b69a76;padding:12px;border-radius:7px;font-size:12px;line-height:1.7}
+@media(max-width:960px){.two{grid-template-columns:1fr}#stageViewport{height:55vh}header{padding:14px}main{padding:12px}.mini-form{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<header>
+<div><h1>高清母图 · 无损拆分工作台</h1><div class="muted">原图直存 · 像素框选 · 审核后发布</div></div>
+<div class="flex"><a href="./index.html">← 返回「美术绘制参考」</a><span id="authState" class="muted">检查登录状态…</span><button id="logout" class="secondary small" hidden>退出</button></div>
+</header>
+<main>
+<div id="status" aria-live="polite">请先登录。页面与原图库共用登录状态。</div>
+<section id="loginPanel" hidden>
+<h2>登录编辑账号</h2>
+<div id="authBox"><input id="email" type="email" placeholder="邮箱" autocomplete="email"><input id="password" type="password" placeholder="密码" autocomplete="current-password"><button id="login">登录</button></div>
+<p class="muted">只能登录后上传与发布；账号与原图库通用。不要在聊天中发送密码或密钥。</p>
+</section>
+<div class="two" id="workPanel" hidden>
+<div>
+<section>
+<h2>① 选择高清母图</h2>
+<label for="file">原图 JPG / PNG / WebP，或装有原图的 ZIP</label>
+<input type="file" id="file" accept=".jpg,.jpeg,.png,.webp,.zip,image/jpeg,image/png,image/webp,application/zip">
+<div id="zipRow" hidden><label for="zipChoice">ZIP 内请选择要入库的原图</label><select id="zipChoice"></select></div>
+<div id="fileMeta" class="muted" style="margin-top:8px">尚未选择文件</div>
+<label for="workTitle">原作名称 *</label><input id="workTitle" placeholder="如：货郎图">
+<label for="author">作者</label><input id="author" placeholder="如：李公麟（传）">
+<label for="era">年代</label><input id="era" placeholder="如：北宋">
+<label for="sourceUrl">原始来源网页</label><input id="sourceUrl" type="url" placeholder="https://g2.ltfc.net/view/...">
+<div class="flex" style="margin-top:14px"><button id="upload" disabled>上传高清母图（原字节）</button></div>
+<progress id="uploadProgress" max="100" value="0"></progress>
+<p class="muted">图片大于6MB会使用 TUS 断点续传。上传的是原文件字节，不经过画布缩放或重新编码。</p>
+</section>
+<section>
+<h2>已有高清母图</h2>
+<select id="masterList"><option value="">载入中…</option></select>
+<div id="currentMaster" class="muted" style="margin-top:10px">选择母图后可继续编辑已有的裁切草稿。</div>
+</section>
+<section>
+<h2>画质保护规则</h2>
+<div class="notice">正式母图始终保存原始二进制文件与 SHA-256。网页仅缩放显示，不改变源文件。裁切区域用母图<strong>实际像素</strong>保存；局部导出 PNG 为原生像素尺寸。图库缩略图可以缩小显示，但正式下载不使用缩略图。</div>
+</section>
+</div>
+<div>
+<section>
+<div class="flex" style="justify-content:space-between">
+<h2 style="margin:0">② 在母图上框选局部</h2>
+<label style="margin:0;display:flex;align-items:center;gap:9px">显示放大 <input type="range" id="zoom" min="1" max="8" step=".25" value="1" style="width:130px"><span id="zoomLabel">适合屏幕</span></label>
+</div>
+<p class="muted">拖动鼠标框选；滚动容器移动画面。坐标按原始像素记录，放大视图不会提升或降低原图分辨率。</p>
+<div id="blank">选择或上传高清母图后显示画面</div>
+<div id="stageViewport" hidden><div id="stage"><img id="masterImage" alt="高清母图原始像素预览" crossorigin="anonymous"><div id="selection"></div></div></div>
+<h3>裁切坐标（原始像素，可手动精修）</h3>
+<div class="mini-form">
+<div><label for="x">X</label><input type="number" id="x" min="0" value="0"></div>
+<div><label for="y">Y</label><input type="number" id="y" min="0" value="0"></div>
+<div><label for="w">宽</label><input type="number" id="w" min="1" value="0"></div>
+<div><label for="h">高</label><input type="number" id="h" min="1" value="0"></div>
+</div>
+<div style="margin-top:10px" class="flex">
+<button id="downloadCrop" class="secondary" disabled>下载所选局部 · 原像素 PNG</button>
+<button id="fullRect" class="secondary" disabled>选整幅母图</button>
+</div>
+</section>
+<section>
+<h2>③ 分类审核与裁切草稿</h2>
+<label for="cropTitle">参考标题</label><input id="cropTitle" placeholder="如：《货郎图》·多层框格货担">
+<div class="flex"><div style="flex:1 1 240px"><label for="category">参考大类</label><select id="category"></select></div><div style="flex:1 1 240px"><label for="subCategory">细分类型</label><input id="subCategory" placeholder="多层框格货担"></div></div>
+<label for="target">发布目标</label><select id="target"><option value="">新建一条参考（不覆盖原记录）</option></select>
+<p class="muted">选择已有记录时，发布将保留其 ID、标题、原有分类和说明，只替换图片及裁切坐标，并备份旧数据。</p>
+<div class="flex"><button id="saveCrop" disabled>保存裁切草稿</button><button class="secondary" id="newCrop">开始新裁切</button></div>
+<div id="cropItems" style="margin-top:16px"></div>
+</section>
+<section>
+<h2>④ 审核发布</h2>
+<p class="muted">草稿不会影响正式图库。请先确认框选完整、分类准确，最后在草稿列表中单独点击「发布」。</p>
+<div id="publishNote" class="notice">尚无可发布内容。发布前将核对云端母图字节大小、裁切边界以及关联的原作。</div>
+</section>
+</div>
+</div>
+</main>
+<script>
+"use strict";
+const PROJECT="otaokoencpoanxjjuqzv", BUCKET="art-reference-images";
+const BASE="https://"+PROJECT+".supabase.co";
+const KEY="sb_publishable_hA9UHbP834axMbvdRRbwyA_4dUTU2-B";
+const db=window.supabase.createClient(BASE,KEY);
+const $=id=>document.getElementById(id);
+const btoaSafe=s=>String(s||"").replace(/[<>&"']/g,"");
+let user=null, master=null, masterImg=null, selectedFile=null, fileObjectURL=null;
+let sourceWidth=0,sourceHeight=0, zoomBase=1, rectangle=null, dragStart=null;
+let cats=[], originalRefs=[], drafts=[], selectedCrop=null, busy=false, zipData=null, zipFiles=[];
+const formatBytes=n=>n>1024*1024?(n/1048576).toFixed(2)+" MB":Math.round(n/1024)+" KB";
+function message(text,kind=""){const s=$("status");s.className=kind;s.textContent=text;}
+function setBusy(v){busy=v; $("upload").disabled=v||!selectedFile||!user;$("saveCrop").disabled=v||!master||!user;}
+function checkRect(){if(!rectangle || !sourceWidth || !sourceHeight)return false;const r=rectangle;return [r.x,r.y,r.w,r.h].every(Number.isInteger)&&r.x>=0&&r.y>=0&&r.w>0&&r.h>0&&r.x+r.w<=sourceWidth&&r.y+r.h<=sourceHeight;}
+function syncRectFields(){for(const k of ["x","y","w","h"])$(k).value=rectangle?.[k]??0;drawSelection();}
+function drawSelection(){const el=$("selection");if(!checkRect()){el.style.display="none";return;}el.style.display="block";el.style.left=(rectangle.x/sourceWidth*100)+"%";el.style.top=(rectangle.y/sourceHeight*100)+"%";el.style.width=(rectangle.w/sourceWidth*100)+"%";el.style.height=(rectangle.h/sourceHeight*100)+"%";}
+function setRectangle(r){rectangle=r?{x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.w),h:Math.round(r.h)}:null;syncRectFields();}
+function showSize(){const m=master;if(!m)return; $("currentMaster").textContent=m.title+" · "+m.original_width+" × "+m.original_height+" px · "+formatBytes(m.original_bytes)+" · SHA-256: "+m.sha256+" · "+m.status; $("publishNote").textContent="当前母图 "+m.title+"；草稿和已发布的参考单独列出。原图的云端文件不会因修改裁切而被重新编码。";}
+function applyZoom(){if(!masterImg||!sourceWidth)return;const viewport=$("stageViewport"),z=Number($("zoom").value),fit=Math.min(1,(viewport.clientWidth-24)/sourceWidth);zoomBase=fit;const width=Math.max(100,Math.round(sourceWidth*fit*z));$("stage").style.width=width+"px";$("zoomLabel").textContent=z===1?"适合屏幕":z.toFixed(2)+"×";drawSelection();}
+async function setImageUrl(url){const im=$("masterImage");im.crossOrigin="anonymous";await new Promise((resolve,reject)=>{im.onload=resolve;im.onerror=()=>reject(new Error("图片加载失败；请检查存储链接与访问权限"));im.src=url;});masterImg=im;sourceWidth=im.naturalWidth;sourceHeight=im.naturalHeight;$("blank").hidden=true;$("stageViewport").hidden=false;$("zoom").value="1";applyZoom();$("fullRect").disabled=false;$("downloadCrop").disabled=false;}
+async function loadFile(file){if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");selectedFile=file;fileObjectURL=URL.createObjectURL(file);await setImageUrl(fileObjectURL);master=null;selectedCrop=null;setRectangle(null);$("currentMaster").textContent="已读取本地图片，尚未上传";$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);$("upload").disabled=!user;drafts=[];renderDrafts();message("原图已在浏览器读取。下一步填写作品信息并上传，不会调整原图片尺寸。","ok");}
+async function zipSelected(){const n=$("zipChoice").value,entry=zipFiles.find(x=>x.name===n);if(!entry)return;const f=await entry.async("blob");if(f.size>250*1024*1024)throw Error("图片超过当前250MB单文件处理上限");const ext=entry.name.toLowerCase().split(".").pop();const type=ext==="png"?"image/png":ext==="webp"?"image/webp":"image/jpeg";await loadFile(new File([f],entry.name.split("/").pop(),{type}));}
+$("file").onchange=async e=>{try{const file=e.target.files?.[0];if(!file)return;if(/\.zip$/i.test(file.name)){if(!window.JSZip)throw Error("ZIP 解压组件未加载");zipData=await JSZip.loadAsync(file);zipFiles=Object.values(zipData.files).filter(z=>!z.dir&&/\.(jpe?g|png|webp)$/i.test(z.name)&&!z.name.startsWith("__MACOSX/"));if(!zipFiles.length)throw Error("ZIP 里没有 JPG、PNG 或 WebP");$("zipRow").hidden=false;$("zipChoice").replaceChildren();zipFiles.forEach(f=>$("zipChoice").add(new Option(f.name,f.name)));await zipSelected();}else{$("zipRow").hidden=true;await loadFile(file);}}catch(err){message(err.message,"err");}};
+$("zipChoice").onchange=async()=>{try{await zipSelected();}catch(e){message(e.message,"err");}};
+$("zoom").oninput=applyZoom;
+for(const key of ["x","y","w","h"]){$(key).addEventListener("input",()=>{const r=Object.fromEntries(["x","y","w","h"].map(k=>[k,Number($(k).value)]));rectangle=r;drawSelection();});}
+function stageXY(evt){const b=$("stage").getBoundingClientRect();return {x:Math.min(sourceWidth,Math.max(0,Math.round((evt.clientX-b.left)/b.width*sourceWidth))),y:Math.min(sourceHeight,Math.max(0,Math.round((evt.clientY-b.top)/b.height*sourceHeight)))};}
+$("stage").addEventListener("pointerdown",e=>{if(!masterImg||e.button!==0)return;dragStart=stageXY(e);$("stage").setPointerCapture(e.pointerId);setRectangle({x:dragStart.x,y:dragStart.y,w:1,h:1});});
+$("stage").addEventListener("pointermove",e=>{if(!dragStart)return;const p=stageXY(e);setRectangle({x:Math.min(p.x,dragStart.x),y:Math.min(p.y,dragStart.y),w:Math.abs(p.x-dragStart.x),h:Math.abs(p.y-dragStart.y)});});
+$("stage").addEventListener("pointerup",()=>{dragStart=null;if(!checkRect())setRectangle(null);});
+$("stage").addEventListener("pointercancel",()=>{dragStart=null;});
+$("fullRect").onclick=()=>setRectangle({x:0,y:0,w:sourceWidth,h:sourceHeight});
+function safeName(t){return String(t||"局部参考").replace(/[\\/:*?"<>|]/g,"_").slice(0,90);}
+$("downloadCrop").onclick=async()=>{try{if(!checkRect())throw Error("请先框选有效裁切范围");const r=rectangle;if(r.w*r.h>80000000)throw Error("范围过大，浏览器无法安全导出；请缩小裁切");const canvas=document.createElement("canvas");canvas.width=r.w;canvas.height=r.h;const ctx=canvas.getContext("2d",{alpha:false});if(!ctx)throw Error("浏览器无法创建画布");ctx.imageSmoothingEnabled=false;ctx.drawImage(masterImg,r.x,r.y,r.w,r.h,0,0,r.w,r.h);const blob=await new Promise(ok=>canvas.toBlob(ok,"image/png"));if(!blob)throw Error("浏览器 PNG 编码失败");const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=safeName($("cropTitle").value||master?.title||"高清局部")+".png";a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);message("已导出 "+r.w+" × "+r.h+" 原生像素 PNG；母图保持不变。","ok");}catch(e){message(e.message,"err");}};
+function storageUrl(path){return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;}
+async function sha256(file){const buffer=await file.arrayBuffer(),hash=await crypto.subtle.digest("SHA-256",buffer);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");}
+async function uploadBytes(file,path){if(file.size<=6*1024*1024){const {error}=await db.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:file.type,cacheControl:"31536000"});if(error)throw error;$("uploadProgress").value=100;return;}
+if(!window.tus?.Upload)throw Error("断点续传组件尚未加载，无法保证大文件传输");
+const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError||!session?.access_token)throw Error("登录已过期，请重新登录");
+await new Promise((resolve,reject)=>{const u=new tus.Upload(file,{endpoint:"https://"+PROJECT+".storage.supabase.co/storage/v1/upload/resumable",headers:{authorization:"Bearer "+session.access_token,"x-upsert":"false"},retryDelays:[0,3000,5000,10000,20000],chunkSize:6*1024*1024,uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,metadata:{bucketName:BUCKET,objectName:path,contentType:file.type,cacheControl:"31536000"},onError:reject,onProgress:(sent,total)=>{$("uploadProgress").value=Math.round(sent/total*100);},onSuccess:resolve});u.findPreviousUploads().then(prev=>{if(prev.length)u.resumeFromPreviousUpload(prev[0]);u.start();}).catch(reject);});}
+async function fetchMasters(selectId){const {data,error}=await db.from("artwork_masters").select("*").order("created_at",{ascending:false}).limit(150);if(error)throw error;const box=$("masterList"),selected=selectId||box.value;box.replaceChildren(new Option("选择之前上传的母图",""));for(const m of data||[])box.add(new Option(m.title+" ("+m.original_width+"×"+m.original_height+")",m.id));if(selected&&data?.some(m=>m.id===selected))box.value=selected;return data||[];}
+$("upload").onclick=async()=>{if(busy)return;setBusy(true);try{if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
+const {data:old,error:lookupError}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupError)throw lookupError;
+if(old){await fetchMasters(old.id);await selectMaster(old);message("检测到相同 SHA-256 母图，已复用云端原文件；没有重复上传。","ok");return;}
+const ext=selectedFile.type==="image/png"?"png":selectedFile.type==="image/webp"?"webp":"jpg";
+const path="masters/"+user.id+"/"+hash+"."+ext;
+$("uploadProgress").hidden=false;$("uploadProgress").style.display="block";$("uploadProgress").value=0;
+await uploadBytes(selectedFile,path);
+const folder="masters/"+user.id;
+const {data:stored,error:verifyError}=await db.storage.from(BUCKET).list(folder,{limit:100,search:hash+"."+ext});if(verifyError)throw verifyError;
+const matched=stored?.find(s=>s.name===hash+"."+ext);if(!matched)throw Error("上传已返回成功，但云端对象未查询到；请刷新后核对，暂不发布");
+const size=Number(matched.metadata?.size??matched.metadata?.contentLength??0);
+if(size&&size!==selectedFile.size)throw Error("云端对象大小与原始文件不一致，禁止入库");
+const payload={title,author:$("author").value.trim()||null,era:$("era").value.trim()||null,source_url:$("sourceUrl").value.trim()||null,original_filename:selectedFile.name,mime_type:selectedFile.type,original_width:sourceWidth,original_height:sourceHeight,original_bytes:selectedFile.size,sha256:hash,storage_path:path,created_by:user.id};
+const {data:saved,error:saveError}=await db.from("artwork_masters").insert(payload).select("*").single();if(saveError)throw saveError;
+await fetchMasters(saved.id);await selectMaster(saved);
+message("高清母图上传并登记成功： "+saved.original_width+" × "+saved.original_height+"；源文件 SHA-256 "+hash+"。可以开始裁切。","ok");
+}catch(e){message("母图上传/登记失败："+e.message,"err");}finally{setBusy(false);$("uploadProgress").style.display="none";}};
+async function selectMaster(m){master=m;selectedCrop=null;setRectangle(null);const url=storageUrl(m.storage_path);if(!(selectedFile&&fileObjectURL&&sourceWidth===m.original_width&&sourceHeight===m.original_height)){await setImageUrl(url);}else{const localHash=await sha256(selectedFile);if(localHash!==m.sha256)await setImageUrl(url);}
+if(sourceWidth!==m.original_width||sourceHeight!==m.original_height)throw Error("云端母图分辨率不符合登记数据");
+$("workTitle").value=m.title;$("author").value=m.author||"";$("era").value=m.era||"";$("sourceUrl").value=m.source_url||"";
+showSize();await loadCandidates();await loadDrafts();$("saveCrop").disabled=false;applyZoom();}
+$("masterList").onchange=async()=>{try{const id=$("masterList").value;if(!id)return;const {data,error}=await db.from("artwork_masters").select("*").eq("id",id).single();if(error)throw error;await selectMaster(data);message("已恢复高清母图和全部裁切草稿。","ok");}catch(e){message(e.message,"err");}};
+async function loadCategories(){const {data,error}=await db.from("categories").select("id,name").order("sort_order");if(error)throw error;cats=data||[];const box=$("category");box.replaceChildren();cats.forEach(x=>box.add(new Option(x.name,x.id)));}
+async function loadCandidates(){const {data,error}=await db.from("references").select("id,title,work_title,source_url").eq("work_title",master.title).limit(200);if(error)throw error;originalRefs=(data||[]).filter(r=>r.work_title===master.title&&(r.source_url===master.source_url||!master.source_url));const el=$("target");el.replaceChildren(new Option("新建一条参考（不覆盖旧图）",""));originalRefs.forEach(r=>el.add(new Option(r.title,r.id)));}
+async function loadDrafts(){const {data,error}=await db.from("artwork_crops").select("*").eq("master_id",master.id).order("created_at");if(error)throw error;drafts=data||[];renderDrafts();}
+function openCrop(c){selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";renderDrafts();}
+function renderDrafts(){const list=$("cropItems");list.replaceChildren();if(!drafts.length){const p=document.createElement("p");p.className="muted";p.textContent="尚无局部。先框选范围并保存草稿。";list.append(p);return;}
+drafts.forEach(c=>{const row=document.createElement("div");row.className="crop-card"+(selectedCrop===c.id?" sel":"");
+const left=document.createElement("div");const name=document.createElement("b");name.textContent=c.title;const meta=document.createElement("small");meta.textContent=c.x+","+c.y+" · "+c.w+"×"+c.h+" px · "+(c.target_reference_id?"替换旧参考":"新增参考");left.append(name,meta);
+const actions=document.createElement("div");actions.className="flex";
+const pill=document.createElement("span");pill.className="pill"+(c.status==="published"?" done":"");pill.textContent=c.status==="published"?"已发布":"草稿";
+const pick=document.createElement("button");pick.className="small secondary";pick.textContent="查看";pick.onclick=()=>openCrop(c);actions.append(pill,pick);
+if(c.status==="draft"){const del=document.createElement("button");del.className="small secondary";del.textContent="删除";del.onclick=async()=>{if(!confirm("删除这条裁切草稿？"))return;const {error}=await db.from("artwork_crops").delete().eq("id",c.id);if(error)return message(error.message,"err");if(selectedCrop===c.id)selectedCrop=null;await loadDrafts();};const pub=document.createElement("button");pub.className="small";pub.textContent="审核发布";pub.onclick=async()=>{if(!confirm("确定已审核清晰度、范围及分类，并发布“"+c.title+"”？"))return;pub.disabled=true;try{const {data,error}=await db.rpc("publish_artwork_crop",{p_crop_id:c.id});if(error)throw error;await loadDrafts();message("发布成功，参考ID："+data+"。旧图已在数据库中备份（如有替换）。","ok");}catch(e){message("发布失败："+e.message,"err");}finally{pub.disabled=false;}};actions.append(del,pub);}
+row.append(left,actions);list.append(row);});}
+$("newCrop").onclick=()=>{selectedCrop=null;setRectangle(null);$("cropTitle").value="";$("subCategory").value="";$("target").value="";renderDrafts();};
+$("saveCrop").onclick=async()=>{if(busy)return;setBusy(true);try{if(!master)throw Error("请先上传或选择母图");if(!checkRect())throw Error("裁切超出母图边界或尺寸为空");const title=$("cropTitle").value.trim(),category_id=$("category").value;if(!title||!category_id)throw Error("请填写参考标题和分类");const payload={master_id:master.id,title,category_id,sub_category:$("subCategory").value.trim()||null,x:rectangle.x,y:rectangle.y,w:rectangle.w,h:rectangle.h,target_reference_id:$("target").value||null,updated_at:new Date().toISOString()};
+if(selectedCrop){const {error}=await db.from("artwork_crops").update(payload).eq("id",selectedCrop).eq("status","draft");if(error)throw error;}else{const {data,error}=await db.from("artwork_crops").insert(payload).select("id").single();if(error)throw error;selectedCrop=data.id;}
+await loadDrafts();message("裁切草稿已保存。尚未修改正式图库，审核后才发布。","ok");
+}catch(e){message(e.message,"err");}finally{setBusy(false);}};
+async function refreshAuth(){const {data:{session}}=await db.auth.getSession();user=session?.user||null;$("loginPanel").hidden=Boolean(user);$("workPanel").hidden=!user;$("logout").hidden=!user;$("authState").textContent=user?"已登录："+user.email:"只读访客";$("upload").disabled=!user||!selectedFile;if(user){await loadCategories();await fetchMasters();message("登录成功。可以直接上传 JPG、PNG 或 ZIP 中的高清母图；也可以恢复上次裁切草稿。","ok");}else{message("请先登录已有的「美术绘制参考」账号。");}}
+$("login").onclick=async()=>{const {error}=await db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});if(error){message("登录失败："+error.message,"err");return;}await refreshAuth();};
+$("logout").onclick=async()=>{await db.auth.signOut();location.reload();};
+window.addEventListener("resize",()=>{if(masterImg)applyZoom();});
+(async()=>{try{await refreshAuth();}catch(e){message("初始化失败："+e.message,"err");}})();
+</script>
+</body></html>
