@@ -105,6 +105,7 @@ code{font-size:12px;word-break:break-all}
 <div style="margin-top:10px" class="flex">
 <button id="downloadCrop" class="secondary" disabled>下载所选局部 · 原像素 PNG</button>
 <button id="fullRect" class="secondary" disabled>选整幅母图</button>
+<button id="applyPreset" class="secondary" hidden>导入《货郎图》6处已有裁切（仅草稿）</button>
 </div>
 </section>
 <section>
@@ -145,7 +146,7 @@ function setRectangle(r){rectangle=r?{x:Math.round(r.x),y:Math.round(r.y),w:Math
 function showSize(){const m=master;if(!m)return; $("currentMaster").textContent=m.title+" · "+m.original_width+" × "+m.original_height+" px · "+formatBytes(m.original_bytes)+" · SHA-256: "+m.sha256+" · "+m.status; $("publishNote").textContent="当前母图 "+m.title+"；草稿和已发布的参考单独列出。原图的云端文件不会因修改裁切而被重新编码。";}
 function applyZoom(){if(!masterImg||!sourceWidth)return;const viewport=$("stageViewport"),z=Number($("zoom").value),fit=Math.min(1,(viewport.clientWidth-24)/sourceWidth);zoomBase=fit;const width=Math.max(100,Math.round(sourceWidth*fit*z));$("stage").style.width=width+"px";$("zoomLabel").textContent=z===1?"适合屏幕":z.toFixed(2)+"×";drawSelection();}
 async function setImageUrl(url){const im=$("masterImage");im.crossOrigin="anonymous";await new Promise((resolve,reject)=>{im.onload=resolve;im.onerror=()=>reject(new Error("图片加载失败；请检查存储链接与访问权限"));im.src=url;});masterImg=im;sourceWidth=im.naturalWidth;sourceHeight=im.naturalHeight;$("blank").hidden=true;$("stageViewport").hidden=false;$("zoom").value="1";applyZoom();$("fullRect").disabled=false;$("downloadCrop").disabled=false;}
-async function loadFile(file){if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");selectedFile=file;fileObjectURL=URL.createObjectURL(file);await setImageUrl(fileObjectURL);master=null;selectedCrop=null;setRectangle(null);$("currentMaster").textContent="已读取本地图片，尚未上传";$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);$("upload").disabled=!user;drafts=[];renderDrafts();message("原图已在浏览器读取。下一步填写作品信息并上传，不会调整原图片尺寸。","ok");}
+async function loadFile(file){if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");selectedFile=file;fileObjectURL=URL.createObjectURL(file);await setImageUrl(fileObjectURL);master=null;selectedCrop=null;setRectangle(null);$("currentMaster").textContent="已读取本地图片，尚未上传";$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);if(/货郎图/.test(file.name)&&sourceWidth===5500&&sourceHeight===6500){if(!$("workTitle").value)$("workTitle").value="货郎图";if(!$("sourceUrl").value)$("sourceUrl").value="https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362";if(!$("author").value)$("author").value="李公麟";if(!$("era").value)$("era").value="北宋";}$("upload").disabled=!user;drafts=[];renderDrafts();message("原图已在浏览器读取。下一步填写作品信息并上传，不会调整原图片尺寸。","ok");}
 async function zipSelected(){const n=$("zipChoice").value,entry=zipFiles.find(x=>x.name===n);if(!entry)return;const f=await entry.async("blob");if(f.size>250*1024*1024)throw Error("图片超过当前250MB单文件处理上限");const ext=entry.name.toLowerCase().split(".").pop();const type=ext==="png"?"image/png":ext==="webp"?"image/webp":"image/jpeg";await loadFile(new File([f],entry.name.split("/").pop(),{type}));}
 $("file").onchange=async e=>{try{const file=e.target.files?.[0];if(!file)return;if(/\.zip$/i.test(file.name)){if(!window.JSZip)throw Error("ZIP 解压组件未加载");zipData=await JSZip.loadAsync(file);zipFiles=Object.values(zipData.files).filter(z=>!z.dir&&/\.(jpe?g|png|webp)$/i.test(z.name)&&!z.name.startsWith("__MACOSX/"));if(!zipFiles.length)throw Error("ZIP 里没有 JPG、PNG 或 WebP");$("zipRow").hidden=false;$("zipChoice").replaceChildren();zipFiles.forEach(f=>$("zipChoice").add(new Option(f.name,f.name)));await zipSelected();}else{$("zipRow").hidden=true;await loadFile(file);}}catch(err){message(err.message,"err");}};
 $("zipChoice").onchange=async()=>{try{await zipSelected();}catch(e){message(e.message,"err");}};
@@ -186,7 +187,7 @@ message("高清母图上传并登记成功： "+saved.original_width+" × "+save
 async function selectMaster(m){master=m;selectedCrop=null;setRectangle(null);const url=storageUrl(m.storage_path);if(!(selectedFile&&fileObjectURL&&sourceWidth===m.original_width&&sourceHeight===m.original_height)){await setImageUrl(url);}else{const localHash=await sha256(selectedFile);if(localHash!==m.sha256)await setImageUrl(url);}
 if(sourceWidth!==m.original_width||sourceHeight!==m.original_height)throw Error("云端母图分辨率不符合登记数据");
 $("workTitle").value=m.title;$("author").value=m.author||"";$("era").value=m.era||"";$("sourceUrl").value=m.source_url||"";
-showSize();await loadCandidates();await loadDrafts();$("saveCrop").disabled=false;applyZoom();}
+showSize();await loadCandidates();await loadDrafts();$("applyPreset").hidden=m.sha256!=="9894f41227243f9c949058b93947527e6c1ceed11217fbc234d137adad7d5af7";$("saveCrop").disabled=false;applyZoom();}
 $("masterList").onchange=async()=>{try{const id=$("masterList").value;if(!id)return;const {data,error}=await db.from("artwork_masters").select("*").eq("id",id).single();if(error)throw error;await selectMaster(data);message("已恢复高清母图和全部裁切草稿。","ok");}catch(e){message(e.message,"err");}};
 async function loadCategories(){const {data,error}=await db.from("categories").select("id,name").order("sort_order");if(error)throw error;cats=data||[];const box=$("category");box.replaceChildren();cats.forEach(x=>box.add(new Option(x.name,x.id)));}
 async function loadCandidates(){const {data,error}=await db.from("references").select("id,title,work_title,source_url").eq("work_title",master.title).limit(200);if(error)throw error;originalRefs=(data||[]).filter(r=>r.work_title===master.title&&(r.source_url===master.source_url||!master.source_url));const el=$("target");el.replaceChildren(new Option("新建一条参考（不覆盖旧图）",""));originalRefs.forEach(r=>el.add(new Option(r.title,r.id)));}
@@ -200,6 +201,24 @@ const pill=document.createElement("span");pill.className="pill"+(c.status==="pub
 const pick=document.createElement("button");pick.className="small secondary";pick.textContent="查看";pick.onclick=()=>openCrop(c);actions.append(pill,pick);
 if(c.status==="draft"){const del=document.createElement("button");del.className="small secondary";del.textContent="删除";del.onclick=async()=>{if(!confirm("删除这条裁切草稿？"))return;const {error}=await db.from("artwork_crops").delete().eq("id",c.id);if(error)return message(error.message,"err");if(selectedCrop===c.id)selectedCrop=null;await loadDrafts();};const pub=document.createElement("button");pub.className="small";pub.textContent="审核发布";pub.onclick=async()=>{if(!confirm("确定已审核清晰度、范围及分类，并发布“"+c.title+"”？"))return;pub.disabled=true;try{const {data,error}=await db.rpc("publish_artwork_crop",{p_crop_id:c.id});if(error)throw error;await loadDrafts();message("发布成功，参考ID："+data+"。旧图已在数据库中备份（如有替换）。","ok");}catch(e){message("发布失败："+e.message,"err");}finally{pub.disabled=false;}};actions.append(del,pub);}
 row.append(left,actions);list.append(row);});}
+$("applyPreset").onclick=async()=>{if(!master||busy)return;const b=$("applyPreset");b.disabled=true;try{
+ const response=await fetch("./presets/huolangtu.json",{cache:"no-cache"});if(!response.ok)throw Error("无法加载已确认裁切清单");
+ const p=await response.json();
+ if(master.sha256!==p.sha256||master.original_width!==p.dimensions[0]||master.original_height!==p.dimensions[1])throw Error("母图 SHA-256 或尺寸与裁切清单不一致，停止导入");
+ if(!confirm("将按之前确认的坐标创建6条待审核草稿。此操作不发布、不覆盖旧图。继续吗？"))return;
+ const rows=[];
+ for(const c of p.crops){
+   if(!cats.some(k=>k.id===c.category_id))throw Error("分类已变更，需先人工确认");
+   if(c.target_id&&!originalRefs.some(k=>k.id===c.target_id))throw Error("旧参考记录未匹配到，请先核对作品名和原作来源");
+   const [x,y,w,h]=c.rect;
+   if(x<0||y<0||w<=0||h<=0||x+w>master.original_width||y+h>master.original_height)throw Error("预设裁切坐标超出母图");
+   if(drafts.some(d=>d.x===x&&d.y===y&&d.w===w&&d.h===h))continue;
+   rows.push({master_id:master.id,title:c.title,category_id:c.category_id,sub_category:c.subcategory,x,y,w,h,target_reference_id:c.target_id||null});
+ }
+ if(!rows.length){message("6处裁切已经存在，不再重复导入。","ok");return;}
+ const {error}=await db.from("artwork_crops").insert(rows);if(error)throw error;
+ await loadDrafts();message("已导入"+rows.length+"条《货郎图》原像素裁切草稿。逐条检查后点「审核发布」。","ok");
+ }catch(e){message("裁切清单导入失败："+e.message,"err");}finally{b.disabled=false;}};
 $("newCrop").onclick=()=>{selectedCrop=null;setRectangle(null);$("cropTitle").value="";$("subCategory").value="";$("target").value="";renderDrafts();};
 $("saveCrop").onclick=async()=>{if(busy)return;setBusy(true);try{if(!master)throw Error("请先上传或选择母图");if(!checkRect())throw Error("裁切超出母图边界或尺寸为空");const title=$("cropTitle").value.trim(),category_id=$("category").value;if(!title||!category_id)throw Error("请填写参考标题和分类");const payload={master_id:master.id,title,category_id,sub_category:$("subCategory").value.trim()||null,x:rectangle.x,y:rectangle.y,w:rectangle.w,h:rectangle.h,target_reference_id:$("target").value||null,updated_at:new Date().toISOString()};
 if(selectedCrop){const {error}=await db.from("artwork_crops").update(payload).eq("id",selectedCrop).eq("status","draft");if(error)throw error;}else{const {data,error}=await db.from("artwork_crops").insert(payload).select("id").single();if(error)throw error;selectedCrop=data.id;}
