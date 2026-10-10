@@ -191,10 +191,18 @@ async function uploadBytes(file,path){if(file.size<=6*1024*1024){const {error}=a
 if(!window.tus?.Upload)throw Error("断点续传组件尚未加载，无法保证大文件传输");
 const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError||!session?.access_token)throw Error("登录已过期，请重新登录");
 await new Promise((resolve,reject)=>{const u=new tus.Upload(file,{endpoint:"https://"+PROJECT+".storage.supabase.co/storage/v1/upload/resumable",headers:{authorization:"Bearer "+session.access_token,"x-upsert":"false"},retryDelays:[0,3000,5000,10000,20000],chunkSize:6*1024*1024,uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,metadata:{bucketName:BUCKET,objectName:path,contentType:file.type,cacheControl:"31536000"},onError:reject,onProgress:(sent,total)=>{$("uploadProgress").value=Math.round(sent/total*100);},onSuccess:resolve});u.findPreviousUploads().then(prev=>{if(prev.length)u.resumeFromPreviousUpload(prev[0]);u.start();}).catch(reject);});}
+async function verifyRemoteOriginal(file,path,expectedHash){
+ const {data,error}=await db.storage.from(BUCKET).download(path);
+ if(error||!data)throw Error("云端回读失败："+(error?.message||"未获得文件"));
+ if(data.size!==file.size)throw Error("原图上传前后字节数不一致");
+ const remoteHash=await sha256(data);
+ if(remoteHash!==expectedHash)throw Error("云端文件 SHA-256 与本地原图不一致，禁止登记");
+ return remoteHash;
+}
 async function fetchMasters(selectId){const {data,error}=await db.from("artwork_masters").select("*").order("created_at",{ascending:false}).limit(150);if(error)throw error;const box=$("masterList"),selected=selectId||box.value;box.replaceChildren(new Option("选择之前上传的母图",""));for(const m of data||[])box.add(new Option(m.title+" ("+m.original_width+"×"+m.original_height+")",m.id));if(selected&&data?.some(m=>m.id===selected))box.value=selected;return data||[];}
 $("upload").onclick=async()=>{if(busy)return;setBusy(true);try{if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
 const {data:old,error:lookupError}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupError)throw lookupError;
-if(old){await fetchMasters(old.id);await selectMaster(old);message("检测到相同 SHA-256 母图，已复用云端原文件；没有重复上传。","ok");return;}
+if(old){message("发现相同母图，正在回读云端原文件校验 SHA-256…");await verifyRemoteOriginal(selectedFile,old.storage_path,hash);await fetchMasters(old.id);await selectMaster(old);message("无损校验通过：本地与云端 SHA-256 完全一致，已复用母图。","ok");return;}
 const ext=selectedFile.type==="image/png"?"png":selectedFile.type==="image/webp"?"webp":"jpg";
 const path="masters/"+user.id+"/"+hash+"."+ext;
 $("uploadProgress").hidden=false;$("uploadProgress").style.display="block";$("uploadProgress").value=0;
@@ -204,10 +212,12 @@ const {data:stored,error:verifyError}=await db.storage.from(BUCKET).list(folder,
 const matched=stored?.find(s=>s.name===hash+"."+ext);if(!matched)throw Error("上传已返回成功，但云端对象未查询到；请刷新后核对，暂不发布");
 const size=Number(matched.metadata?.size??matched.metadata?.contentLength??0);
 if(size&&size!==selectedFile.size)throw Error("云端对象大小与原始文件不一致，禁止入库");
+message("文件已上传，正在回读云端整张原图并核对 SHA-256…");
+await verifyRemoteOriginal(selectedFile,path,hash);
 const payload={title,author:$("author").value.trim()||null,era:$("era").value.trim()||null,source_url:$("sourceUrl").value.trim()||null,original_filename:selectedFile.name,mime_type:selectedFile.type,original_width:sourceWidth,original_height:sourceHeight,original_bytes:selectedFile.size,sha256:hash,storage_path:path,created_by:user.id};
 const {data:saved,error:saveError}=await db.from("artwork_masters").insert(payload).select("*").single();if(saveError)throw saveError;
 await fetchMasters(saved.id);await selectMaster(saved);
-message("高清母图上传并登记成功： "+saved.original_width+" × "+saved.original_height+"；源文件 SHA-256 "+hash+"。可以开始裁切。","ok");
+message("无损校验通过：上传前后 SHA-256 完全一致；"+saved.original_width+" × "+saved.original_height+" 原生像素，原始字节未改变。可以开始裁切。","ok");
 }catch(e){message("母图上传/登记失败："+e.message,"err");}finally{setBusy(false);$("uploadProgress").style.display="none";}};
 async function selectMaster(m){master=m;selectedCrop=null;setRectangle(null);const url=storageUrl(m.storage_path);if(!(selectedFile&&fileObjectURL&&sourceWidth===m.original_width&&sourceHeight===m.original_height)){await setImageUrl(url);}else{const localHash=await sha256(selectedFile);if(localHash!==m.sha256)await setImageUrl(url);}
 if(sourceWidth!==m.original_width||sourceHeight!==m.original_height)throw Error("云端母图分辨率不符合登记数据");
