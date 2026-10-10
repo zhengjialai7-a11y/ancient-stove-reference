@@ -41,6 +41,9 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 .zoom-stage{position:absolute;inset:0;overflow:hidden;cursor:grab;touch-action:none}
 .zoom-stage.dragging{cursor:grabbing}
 .zoom-stage img,.zoom-stage canvas{position:absolute;left:0;top:0;max-width:none;max-height:none;transform-origin:0 0;user-select:none;-webkit-user-drag:none}
+.zoom-crop-frame{position:absolute;display:none;z-index:1;border:2px solid #f7cd53;box-shadow:0 0 0 1px rgba(0,0,0,.75),0 0 0 3px rgba(247,205,83,.3);pointer-events:none}
+.zoom-mode-label{color:white;font-size:12px;white-space:nowrap;max-width:230px;overflow:hidden;text-overflow:ellipsis}
+.zoom-toolbar{max-width:calc(100vw - 20px);flex-wrap:wrap;justify-content:center}
 .zoom-toolbar{position:absolute;z-index:2;top:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center;background:rgba(28,28,28,.78);padding:8px;border-radius:12px;backdrop-filter:blur(10px)}
 .zoom-toolbar button{border:1px solid rgba(255,255,255,.22);background:#fff;color:#222;border-radius:8px;padding:8px 12px;cursor:pointer}
 .zoom-toolbar .zoom-close{background:#333;color:#fff}
@@ -88,6 +91,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
   <div class="detail-actions">
     <button class="btn secondary detail-back" id="detailBackBtn" type="button">← 返回图库</button>
     <button class="btn secondary" id="downloadNativeCrop" type="button" style="display:none;margin-left:9px">下载原生像素 PNG</button>
+    <button class="btn secondary" id="viewFullArtwork" type="button" style="display:none;margin-left:9px">查看完整古画</button>
   </div>
   <div class="detail-shell">
     <div class="detail-image-wrap" id="detailImageWrap">
@@ -130,12 +134,15 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
   <div class="zoom-stage" id="zoomStage">
     <img id="zoomImage" alt="" style="display:none">
     <canvas id="zoomCanvas" style="display:none"></canvas>
+    <div id="zoomCropFrame" class="zoom-crop-frame" aria-hidden="true"></div>
   </div>
   <div class="zoom-toolbar">
+    <span class="zoom-mode-label" id="zoomModeLabel">局部放大</span>
     <button id="zoomOutBtn" type="button">−</button>
     <span class="zoom-percent" id="zoomPercent">100%</span>
     <button id="zoomInBtn" type="button">＋</button>
-    <button id="zoomResetBtn" type="button">还原</button>
+    <button id="zoomResetBtn" type="button">适合窗口</button>
+    <button id="zoomNativeBtn" type="button">1:1 原像素</button>
     <button class="zoom-close" id="zoomCloseBtn" type="button">关闭 ×</button>
   </div>
 </div>
@@ -303,30 +310,60 @@ function drawCrop(canvas,x,detail=false,onDone=null){
 }
 
 const zoomState={scale:1,minScale:.1,maxScale:10,x:0,y:0,w:0,h:0,dragging:false,lastX:0,lastY:0,target:null};
+let zoomViewerMode="crop",zoomCropSource=null,zoomViewerRequest=0;
 
 function activeDetailVisual(){
   const canvas=$("#detailCanvas"),img=$("#detailImage");
   return canvas.style.display!=="none" ? {type:"canvas",el:canvas} : {type:"img",el:img};
 }
+function originalPaintingUrl(x){
+  // A confirmed mother-image URL takes priority over any thumbnail/cropped asset URL.
+  if(x?.highres_url)return x.highres_url;
+  if(hasCrop(x)&&x?.image_url)return x.image_url;
+  return "";
+}
 function renderZoom(){
   if(!zoomState.target)return;
   zoomState.target.style.transform="translate("+zoomState.x+"px,"+zoomState.y+"px) scale("+zoomState.scale+")";
   $("#zoomPercent").textContent=Math.round(zoomState.scale*100)+"%";
+  const frame=$("#zoomCropFrame");
+  if(zoomViewerMode==="full"&&zoomCropSource&&zoomState.target===$("#zoomImage")){
+    const r=zoomCropSource,scale=zoomState.scale;
+    frame.style.left=(zoomState.x+r.crop_x*zoomState.w*scale)+"px";
+    frame.style.top=(zoomState.y+r.crop_y*zoomState.h*scale)+"px";
+    frame.style.width=Math.max(1,r.crop_w*zoomState.w*scale)+"px";
+    frame.style.height=Math.max(1,r.crop_h*zoomState.h*scale)+"px";
+    frame.style.display="block";
+  }else frame.style.display="none";
 }
 function fitZoom(){
   const stage=$("#zoomStage");
   if(!zoomState.target||!zoomState.w||!zoomState.h)return;
-  const pad=48,sw=stage.clientWidth-pad*2,sh=stage.clientHeight-pad*2;
+  const pad=48,sw=Math.max(100,stage.clientWidth-pad*2),sh=Math.max(100,stage.clientHeight-pad*2);
   zoomState.scale=Math.min(sw/zoomState.w,sh/zoomState.h,1);
-  zoomState.minScale=Math.max(.05,zoomState.scale*.35);
+  zoomState.minScale=Math.max(.005,zoomState.scale*.35);
   zoomState.x=(stage.clientWidth-zoomState.w*zoomState.scale)/2;
   zoomState.y=(stage.clientHeight-zoomState.h*zoomState.scale)/2;
+  renderZoom();
+}
+function zoomNativePixels(){
+  if(!zoomState.target)return;
+  const stage=$("#zoomStage");
+  const r=zoomViewerMode==="full"?zoomCropSource:null;
+  const cx=r?(r.crop_x+r.crop_w/2)*zoomState.w:zoomState.w/2;
+  const cy=r?(r.crop_y+r.crop_h/2)*zoomState.h:zoomState.h/2;
+  zoomState.scale=1;zoomState.x=stage.clientWidth/2-cx;zoomState.y=stage.clientHeight/2-cy;
   renderZoom();
 }
 function openZoomViewer(){
   const v=activeDetailVisual();
   if(!v||!v.el)return;
-  const viewer=$("#zoomViewer"),zi=$("#zoomImage"),zc=$("#zoomCanvas");
+  const nonce=++zoomViewerRequest,viewer=$("#zoomViewer"),zi=$("#zoomImage"),zc=$("#zoomCanvas");
+  zoomViewerMode="crop";zoomCropSource=null;zoomState.target=null;
+  $("#zoomCropFrame").style.display="none";
+  $("#zoomModeLabel").textContent="局部放大";
+  $("#zoomCloseBtn").textContent="关闭 ×";
+  zi.onload=null;zi.onerror=null;
   zi.style.display="none";zc.style.display="none";
   if(v.type==="canvas"){
     const x=refs.find(r=>String(r.id)===String(currentDetailId));
@@ -334,12 +371,13 @@ function openZoomViewer(){
     zc.style.display="block";
     viewer.classList.add("show");viewer.setAttribute("aria-hidden","false");
     drawCrop(zc,x,true,ok=>{
-      if(!ok)return;
+      if(!ok||nonce!==zoomViewerRequest)return;
       zoomState.target=zc;zoomState.w=zc.width;zoomState.h=zc.height;
       requestAnimationFrame(fitZoom);
     });
   }else{
     const start=()=>{
+      if(nonce!==zoomViewerRequest)return;
       zoomState.target=zi;zoomState.w=zi.naturalWidth||v.el.naturalWidth;zoomState.h=zi.naturalHeight||v.el.naturalHeight;
       viewer.classList.add("show");viewer.setAttribute("aria-hidden","false");
       requestAnimationFrame(fitZoom);
@@ -352,11 +390,40 @@ function openZoomViewer(){
   }
   document.body.style.overflow="hidden";
 }
+function openFullArtworkViewer(x){
+  const url=originalPaintingUrl(x);
+  if(!url){alert("这条参考尚未关联高清母图，无法显示完整古画");return;}
+  const nonce=++zoomViewerRequest,viewer=$("#zoomViewer"),zi=$("#zoomImage"),zc=$("#zoomCanvas");
+  zoomViewerMode="full";zoomCropSource=hasCrop(x)?x:null;zoomState.target=null;
+  $("#zoomCropFrame").style.display="none";
+  $("#zoomModeLabel").textContent="正在加载完整古画…";
+  $("#zoomCloseBtn").textContent="返回局部 ×";
+  zi.onload=null;zi.onerror=null;zc.style.display="none";
+  zi.alt=(x.work_title||"古画")+" · 完整高清母图";
+  zi.onload=()=>{
+    if(nonce!==zoomViewerRequest)return;
+    zoomState.target=zi;zoomState.w=zi.naturalWidth;zoomState.h=zi.naturalHeight;
+    $("#zoomModeLabel").textContent="完整古画 · "+zoomState.w+" × "+zoomState.h;
+    requestAnimationFrame(fitZoom);
+  };
+  zi.onerror=()=>{
+    if(nonce!==zoomViewerRequest)return;
+    closeZoomViewer();
+    alert("完整古画加载失败，请检查母图链接或稍后重试。");
+  };
+  zi.style.display="block";
+  viewer.classList.add("show");viewer.setAttribute("aria-hidden","false");
+  document.body.style.overflow="hidden";
+  zi.src=url;
+}
 function closeZoomViewer(){
+  ++zoomViewerRequest;
   $("#zoomViewer").classList.remove("show");
   $("#zoomViewer").setAttribute("aria-hidden","true");
+  $("#zoomCropFrame").style.display="none";
+  $("#zoomImage").onload=null;$("#zoomImage").onerror=null;
   document.body.style.overflow="";
-  zoomState.target=null;
+  zoomState.target=null;zoomCropSource=null;
 }
 function zoomAt(factor,cx,cy){
   if(!zoomState.target)return;
@@ -394,6 +461,7 @@ $("#zoomStage").addEventListener("dblclick",e=>{e.preventDefault();fitZoom()});
 $("#zoomInBtn").onclick=()=>zoomAt(1.25);
 $("#zoomOutBtn").onclick=()=>zoomAt(1/1.25);
 $("#zoomResetBtn").onclick=fitZoom;
+$("#zoomNativeBtn").onclick=zoomNativePixels;
 $("#zoomCloseBtn").onclick=closeZoomViewer;
 window.addEventListener("keydown",e=>{
   if(e.key==="Escape"&&$("#zoomViewer").classList.contains("show")){closeZoomViewer();return}
@@ -453,6 +521,8 @@ function openDetailPage(x,updateHash=true){
  const resetScroll=String(currentDetailId)!==String(x.id)||!$("#detailPage").classList.contains("show");
  $("#downloadNativeCrop").style.display=hasCrop(x)?"inline-block":"none";
  $("#downloadNativeCrop").onclick=()=>downloadNativeCrop(x);
+ $("#viewFullArtwork").style.display=originalPaintingUrl(x)?"inline-block":"none";
+ $("#viewFullArtwork").onclick=()=>openFullArtworkViewer(x);
  $("#listView").style.display="none";
  $("#detailPage").classList.add("show");
  if(hasCrop(x)){
