@@ -131,6 +131,7 @@ code{font-size:12px;word-break:break-all}
 <div class="flex"><button id="saveCrop" disabled>保存裁切草稿</button><button class="secondary" id="newCrop">开始新裁切</button></div>
 <div id="cropItems" style="margin-top:16px"></div>
 <div id="autoSaveState" role="status" aria-live="polite" class="muted" style="margin-top:10px">点击草稿「查看」，重新框选后自动保存坐标；保存成功即可审核发布。</div>
+<div id="editHistory" class="muted" style="margin-top:10px;padding:10px;background:#f3efe6;border-radius:9px" aria-live="polite">选择一条草稿查看修改记录；新修改会自动累积成为后续 AI 拆分的反馈数据。</div>
 </section>
 <section>
 <h2>④ 审核发布</h2>
@@ -175,7 +176,7 @@ function autoSaveCropRange(){
      .eq("id",id).eq("master_id",masterId).eq("status","draft").select("id");
    if(error||!data?.length)throw Error(error?.message||"草稿未能更新");
    const draft=drafts.find(x=>x.id===id);if(draft)Object.assign(draft,rect);
-   if(seq===cropSaveSeq){cropSaveFailed=false;feedback.textContent="裁切已自动保存至对应草稿，可直接审核发布";renderDrafts();}
+   if(seq===cropSaveSeq){cropSaveFailed=false;feedback.textContent="裁切已自动保存至对应草稿，可直接审核发布";renderDrafts();loadCropHistory(id);}
  }).catch(e=>{cropSaveFailed=true;feedback.textContent="自动保存失败："+e.message+"。请勿发布，重新框选后重试。";throw e;});
  return pendingCropSave;
 }
@@ -250,7 +251,21 @@ $("masterList").onchange=async()=>{try{const id=$("masterList").value;if(!id)ret
 async function loadCategories(){const {data,error}=await db.from("categories").select("id,name").order("sort_order");if(error)throw error;cats=data||[];const box=$("category");box.replaceChildren();cats.forEach(x=>box.add(new Option(x.name,x.id)));}
 async function loadCandidates(){const {data,error}=await db.from("references").select("id,title,work_title,source_url").eq("work_title",master.title).limit(200);if(error)throw error;const sourceId=(master.source_url||"").match(/[a-f0-9]{24}/i)?.[0]||null;originalRefs=(data||[]).filter(r=>r.work_title===master.title&&(r.source_url===master.source_url||(sourceId&&r.source_url?.includes(sourceId))||(!master.source_url&&!r.source_url)));const el=$("target");el.replaceChildren(new Option("新建一条参考（不覆盖旧图）",""));originalRefs.forEach(r=>el.add(new Option(r.title,r.id)));}
 async function loadDrafts(){const {data,error}=await db.from("artwork_crops").select("*").eq("master_id",master.id).order("created_at");if(error)throw error;drafts=data||[];renderDrafts();}
-function openCrop(c){if(selectedCrop!==c.id&&cropSaveFailed){alert("上一处裁切保存失败，请先重试保存再切换");return;}selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";$("autoSaveState").textContent=c.status==="draft"?"已选择「"+c.title+"」，重新框选后自动保存到此记录。":"此参考已经发布；不能通过草稿自动修改。";renderDrafts();}
+async function loadCropHistory(cropId){
+ const box=$("editHistory");box.textContent="正在读取裁切修改历史…";
+ const {data,error}=await db.from("artwork_crop_edit_history")
+   .select("operation,previous_rect,new_rect,previous_title,new_title,previous_category_id,new_category_id,recorded_at")
+   .eq("crop_id",cropId).order("recorded_at",{ascending:true}).limit(100);
+ if(selectedCrop!==cropId){return;}
+ if(error){box.textContent="修改记录读取失败："+error.message;return;}
+ const events=data||[],changes=events.filter(e=>e.operation==="resize"),pub=events.find(e=>e.operation==="publish");
+ const base=events.find(e=>e.operation==="initial")?.new_rect;
+ const latest=events.at(-1)?.new_rect;
+ let summary="记录："+events.length+"次 · 裁切范围调整："+changes.length+"次"+(pub?" · 已发布":" · 待审核");
+ if(base&&latest&&changes.length){const area1=base.w*base.h,area2=latest.w*latest.h;const delta=Math.round((area2/area1-1)*100);summary+=" · 相对初始面积："+(delta>=0?"+":"")+delta+"%";}
+ box.textContent=summary;
+}
+function openCrop(c){if(selectedCrop!==c.id&&cropSaveFailed){alert("上一处裁切保存失败，请先重试保存再切换");return;}selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";$("autoSaveState").textContent=c.status==="draft"?"已选择「"+c.title+"」，重新框选后自动保存到此记录。":"此参考已经发布；不能通过草稿自动修改。";renderDrafts();if(c.status==="draft")loadCropHistory(c.id);else $("editHistory").textContent="这条参考已经发布；点击其他待审核草稿查看编辑记录。";}
 function renderDrafts(){const list=$("cropItems");list.replaceChildren();if(!drafts.length){const p=document.createElement("p");p.className="muted";p.textContent="尚无局部。先框选范围并保存草稿。";list.append(p);return;}
 drafts.forEach(c=>{const row=document.createElement("div");row.className="crop-card"+(selectedCrop===c.id?" sel":"");
 const left=document.createElement("div");const name=document.createElement("b");name.textContent=c.title;const meta=document.createElement("small");meta.textContent=c.x+","+c.y+" · "+c.w+"×"+c.h+" px · "+(c.target_reference_id?"替换旧参考":"新增参考");left.append(name,meta);
