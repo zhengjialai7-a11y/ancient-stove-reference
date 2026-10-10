@@ -52,6 +52,9 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 .detail-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
 .detail-actions{position:sticky;top:0;z-index:10;display:flex;align-items:center;background:var(--bg);padding:0 0 14px}
 .detail-back{flex-shrink:0}
+.image-paste-area{border:1px dashed var(--line);border-radius:10px;background:#f8f5ee;padding:14px;margin-top:10px;outline:none;font-size:13px;color:var(--muted)}
+.image-paste-area:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--chip)}
+.image-upload-preview{margin-top:10px}.image-upload-preview img{max-width:100%;max-height:240px;display:block;border-radius:8px;margin-bottom:8px}
 .thumb,.meta h3{cursor:pointer}
 @media(max-width:900px){.layout{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.sidebar{height:min(24dvh,220px)}.thumb{height:180px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}.detail-shell{grid-template-columns:1fr}.detail-image-wrap{min-height:320px}}
 </style>
@@ -159,7 +162,11 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 <div><label>标题 *</label><input id="fTitle"></div>
 <div><label>大类 *</label><select id="fCategory"></select></div>
 <div><label>细分</label><input id="fSubCategory" placeholder="例如：书柜 / 多宝格 / 琴桌 / 折屏"></div>
-<div class="full"><label>上传图片</label><input id="fFile" type="file" accept="image/*"></div>
+<div class="full"><label for="fFile">上传图片</label><input id="fFile" type="file" accept="image/*">
+<div class="image-paste-area" id="imagePasteArea" tabindex="0" role="group" aria-label="粘贴图片区域">复制图片后，点击这里按 Ctrl+V 粘贴（Mac：⌘+V）。也可以在本窗口直接粘贴图片。</div>
+<div class="status" id="imageUploadStatus" role="status" aria-live="polite"></div>
+<div class="image-upload-preview" id="imageUploadPreview" hidden><img id="imageUploadPreviewImg" alt="待保存图片预览"><button class="mini" id="clearPendingImageBtn" type="button">取消更换图片</button></div>
+</div>
 <div class="full"><label>或填写图片地址</label><input id="fImage" placeholder="https://...jpg"></div>
 <div class="full"><label>来源页</label><input id="fSource"></div>
 <div><label>年代</label><input id="fEra" placeholder="北宋 / 明代 / 近现代"></div>
@@ -182,11 +189,12 @@ const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
 let categories=[],refs=[],user=null,activeCategory="全部参考",editingId=null,currentDetailId=null;
 let editingCategoryId=null,categorySaving=false;
+let pendingImageFile=null,pendingImagePreviewUrl=null,itemSaving=false;
 
 function esc(v){return String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
-function openModal(id){$("#"+id).classList.add("show")}function closeModal(id){$("#"+id).classList.remove("show")}
+function openModal(id){$("#"+id).classList.add("show")}function closeModal(id){if(id==="itemModal"&&itemSaving)return;$("#"+id).classList.remove("show");if(id==="itemModal")clearPendingImage()}
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>closeModal(b.dataset.close));
-document.querySelectorAll(".modal").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)m.classList.remove("show")}));
+document.querySelectorAll(".modal").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)closeModal(m.id)}));
 
 async function loadAll(){
  const [{data:c,error:ce},{data:r,error:re}]=await Promise.all([
@@ -472,8 +480,31 @@ function syncDetailFromHash(){
 }
 $("#detailBackBtn").onclick=()=>closeDetailPage(true);
 window.addEventListener("popstate",syncDetailFromHash);
-function clearForm(){["fTitle","fSubCategory","fImage","fSource","fEra","fType","fInstitution","fFocus","fTags","fNote"].forEach(id=>$("#"+id).value="");$("#fFile").value=""}
-function editItem(x){editingId=x.id;$("#itemModalTitle").textContent="编辑参考";$("#fTitle").value=x.title||"";$("#fCategory").value=x.category_id;$("#fSubCategory").value=x.sub_category||"";$("#fImage").value=x.image_url||"";$("#fSource").value=x.source_url||"";$("#fEra").value=x.era||"";$("#fType").value=x.type||"";$("#fInstitution").value=x.institution||"";$("#fFocus").value=x.focus||"";$("#fTags").value=(x.tags||[]).join(", ");$("#fNote").value=x.note||"";openModal("itemModal")}
+function clearPendingImage(clearFileInput=true){
+ pendingImageFile=null;
+ if(pendingImagePreviewUrl)URL.revokeObjectURL(pendingImagePreviewUrl);
+ pendingImagePreviewUrl=null;if(clearFileInput)$("#fFile").value="";
+ $("#imageUploadPreviewImg").removeAttribute("src");$("#imageUploadPreview").hidden=true;$("#imageUploadStatus").textContent="";
+}
+function selectPendingImage(file,origin){
+ if(itemSaving||!file)return;
+ if(!file.type.startsWith("image/")){$("#imageUploadStatus").textContent="请选择或粘贴图片文件";return}
+ clearPendingImage(origin!=="file");pendingImageFile=file;pendingImagePreviewUrl=URL.createObjectURL(file);
+ $("#imageUploadPreviewImg").src=pendingImagePreviewUrl;$("#imageUploadPreview").hidden=false;
+ $("#imageUploadStatus").textContent=(origin==="paste"?"已粘贴图片":"已选择本地图片")+"："+file.name+"。点击保存后上传。";
+}
+$("#fFile").addEventListener("change",()=>{const file=$("#fFile").files[0];if(file)selectPendingImage(file,"file")});
+$("#clearPendingImageBtn").onclick=()=>{if(!itemSaving)clearPendingImage()};
+$("#itemModal").addEventListener("paste",e=>{
+ if(!$("#itemModal").classList.contains("show"))return;
+ const file=[...(e.clipboardData?.items||[])].find(item=>item.kind==="file"&&item.type.startsWith("image/"))?.getAsFile();
+ if(!file)return;
+ e.preventDefault();if(itemSaving)return;
+ const ext=({"image/png":"png","image/jpeg":"jpg","image/webp":"webp","image/gif":"gif","image/svg+xml":"svg"})[file.type]||"png";
+ selectPendingImage(new File([file],"粘贴图片-"+Date.now()+"."+ext,{type:file.type}),"paste");
+});
+function clearForm(){clearPendingImage();["fTitle","fSubCategory","fImage","fSource","fEra","fType","fInstitution","fFocus","fTags","fNote"].forEach(id=>$("#"+id).value="");$("#saveMsg").textContent=""}
+function editItem(x){if(itemSaving)return;clearForm();editingId=x.id;$("#itemModalTitle").textContent="编辑参考";$("#fTitle").value=x.title||"";$("#fCategory").value=x.category_id;$("#fSubCategory").value=x.sub_category||"";$("#fImage").value=x.image_url||"";$("#fSource").value=x.source_url||"";$("#fEra").value=x.era||"";$("#fType").value=x.type||"";$("#fInstitution").value=x.institution||"";$("#fFocus").value=x.focus||"";$("#fTags").value=(x.tags||[]).join(", ");$("#fNote").value=x.note||"";openModal("itemModal")}
 async function deleteItem(x){if(!confirm("确定删除“"+x.title+"”吗？"))return;const {error}=await db.from("references").delete().eq("id",x.id);if(error)alert(error.message)}
 async function uploadImage(file){
  const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"");
@@ -483,18 +514,22 @@ async function uploadImage(file){
  return db.storage.from("art-reference-images").getPublicUrl(path).data.publicUrl;
 }
 async function saveItem(){
+ if(itemSaving)return;
  if(!user)return alert("请先登录");
- const title=$("#fTitle").value.trim(),category_id=$("#fCategory").value,file=$("#fFile").files[0];let image_url=$("#fImage").value.trim();
+ const title=$("#fTitle").value.trim(),category_id=$("#fCategory").value,file=pendingImageFile;let image_url=$("#fImage").value.trim();
  if(!title||!category_id)return alert("标题和大类为必填");
- $("#saveMsg").textContent="正在保存…";
+ itemSaving=true;$("#saveItem").disabled=true;$("#fFile").disabled=true;$("#clearPendingImageBtn").disabled=true;$("#saveMsg").textContent="正在保存…";
  try{
    if(file)image_url=await uploadImage(file);
    if(!image_url)throw new Error("请上传图片或填写图片地址");
    const payload={title,category_id,sub_category:$("#fSubCategory").value.trim()||null,image_url,source_url:$("#fSource").value.trim()||null,era:$("#fEra").value.trim()||null,type:$("#fType").value.trim()||null,institution:$("#fInstitution").value.trim()||null,focus:$("#fFocus").value.trim()||null,note:$("#fNote").value.trim()||null,tags:$("#fTags").value.split(/[,，]/).map(s=>s.trim()).filter(Boolean),updated_by:user.id};
+   const existing=refs.find(x=>x.id===editingId);
+   if(existing&&(file||image_url!==existing.image_url))Object.assign(payload,{crop_x:null,crop_y:null,crop_w:null,crop_h:null});
    let res;if(editingId)res=await db.from("references").update(payload).eq("id",editingId);else res=await db.from("references").insert({...payload,created_by:user.id});
    if(res.error)throw res.error;
-   closeModal("itemModal");editingId=null;clearForm();await loadAll();
+   itemSaving=false;closeModal("itemModal");editingId=null;clearForm();await loadAll();
  }catch(e){$("#saveMsg").textContent="保存失败："+e.message}
+ finally{itemSaving=false;$("#saveItem").disabled=false;$("#fFile").disabled=false;$("#clearPendingImageBtn").disabled=false}
 }
 function openCategoryModal(category=null){
  if(!user||categorySaving)return;
