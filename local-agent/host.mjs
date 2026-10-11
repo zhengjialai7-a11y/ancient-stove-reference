@@ -5,7 +5,8 @@ import {promisify} from 'node:util';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
-import {CaptureClient,Decoder,frame} from './core.mjs';
+import {CaptureClient,Decoder,frame,API,STORAGE} from './core.mjs';
+import {createCloudTransport,networkError} from './network.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url)),configPath=path.join(root,'config.json');
 const config=JSON.parse(await readFile(configPath,'utf8'));
 if(!config.allowedOrigins?.includes(process.argv[2]))process.exit(1);
@@ -16,13 +17,16 @@ try{try{const prior=JSON.parse(await readFile(lockPath,'utf8'));try{process.kill
 }catch{process.stdout.write(frame({event:true,error:'另一个浏览器正在运行本机助手。请关闭其采集任务后重试。'}));process.exit(1);}
 process.on('exit',()=>{try{if(JSON.parse(readFileSync(lockPath,'utf8')).pid===process.pid)unlinkSync(lockPath);}catch{}});
 const send=value=>process.stdout.write(frame(value));
-const client=new CaptureClient({directory:config.directory,stateDirectory,event:state=>send({event:true,state})});await client.load();
+const network=createCloudTransport({origins:[API,STORAGE]});
+process.on('exit',()=>network.close());
+const client=new CaptureClient({fetchImpl:network.fetch,directory:config.directory,stateDirectory,event:state=>send({event:true,state})});await client.load();
 const decoder=new Decoder();
 async function handle(message){
  const id=message.id;try{let result;
   switch(message.command){
-   case 'hello':case 'status':result=client.status();break;
-   case 'session':result=await client.setSession(message.accessToken);break;
+   case 'hello':{if(client.running){result=client.status();break;}try{await network.refresh();result={...client.status(),network:await client.networkCheck()};}catch(e){result={...client.status(),network:{ok:false,checks:[{label:'Windows 代理设置',ok:false,error:networkError(e,'读取 Windows 代理设置',API).message}]}};}break;}
+   case 'status':result=client.status();break;
+   case 'session':if(client.running)throw Error('正在上传，不能切换账号或重置网络');try{await network.refresh();}catch(e){throw networkError(e,'读取 Windows 代理设置',API);}result=await client.setSession(message.accessToken);break;
    case 'pause':client.paused=true;result={paused:true};break;
    case 'resume':client.paused=false;result={paused:false};break;
    case 'task':result=await client.completedParts(message.task);break;
