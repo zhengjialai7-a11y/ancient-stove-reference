@@ -100,7 +100,7 @@ code{font-size:12px;word-break:break-all}
 <label for="era">年代</label><input id="era" placeholder="如：北宋">
 <label for="sourceUrl">原始来源网页</label><input id="sourceUrl" type="url" placeholder="https://g2.ltfc.net/view/...">
 <div class="flex" style="margin-top:14px"><button id="upload" disabled>上传高清母图（原字节）</button></div>
-<progress id="uploadProgress" max="100" value="0"></progress>
+<section style="border:1px solid #d2c5b1;padding:12px;border-radius:10px;margin:12px 0"><strong>批量上传母图到同一古画项目</strong><p class="muted">先选择古画项目，一次选中多张原图。按顺序逐张校验 SHA-256 后入库。</p><input id="batchFiles" type="file" multiple accept=".jpg,.jpeg,.png,.webp"><div class="flex" style="margin-top:8px"><button type="button" id="batchGo">开始批量上传</button><button type="button" id="batchStop" class="secondary">当前张完成后停止</button><button type="button" id="batchRetry" class="secondary">重试失败</button><button type="button" id="batchClear" class="secondary">清空</button></div><div id="batchInfo" class="muted"></div><div id="batchList" style="display:grid;gap:5px;max-height:320px;overflow:auto"></div></section><progress id="uploadProgress" max="100" value="0"></progress>
 <div id="uploadResult" role="status" aria-live="polite" style="margin-top:10px;padding:10px;border-radius:9px;background:#f0ece3;border:1px solid #ded8cc;font-size:13px;line-height:1.65">选择高清原图后，点击「上传高清母图」，这里会显示校验结果。</div>
 <p class="muted">图片大于6MB会使用 TUS 断点续传。上传的是原文件字节，不经过画布缩放或重新编码。</p>
 </section>
@@ -510,6 +510,82 @@ const {data:saved,error:saveError}=await db.from("artwork_masters").insert(paylo
 await fetchMasters(saved.id);await selectMaster(saved);await loadProjects(saved.project_id);$("partLabel").value="";
 message("无损校验通过：上传前后 SHA-256 完全一致；"+saved.original_width+" × "+saved.original_height+" 原生像素，原始字节未改变。可以开始裁切。","ok");
 }catch(e){message("母图上传/登记失败："+e.message,"err");}finally{setBusy(false);$("uploadProgress").style.display="none";}};
+
+let multiQueue=[],multiRunning=false,multiStop=false;
+function drawMultiQueue(){
+ const list=$("batchList");list.replaceChildren();
+ multiQueue.forEach((it,i)=>{
+  const line=document.createElement("div");line.style.cssText="display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:7px;border:1px solid #ddd;border-radius:7px";
+  const name=document.createElement("span");name.style.cssText="flex:3;min-width:150px;font-size:12px;overflow-wrap:anywhere";name.textContent=(i+1)+". "+it.file.name+" · "+it.status+(it.error?"："+it.error:"");
+  const label=document.createElement("input");label.type="text";label.style.cssText="flex:1;min-width:80px";label.value=it.label;label.placeholder="分段名称";label.disabled=multiRunning||it.status==="完成";label.oninput=()=>it.label=label.value;
+  line.append(name,label);
+  for(const [symbol,delta] of [["↑",-1],["↓",1]]){
+   const b=document.createElement("button");b.type="button";b.className="secondary small";b.textContent=symbol;
+   const j=i+delta;b.disabled=multiRunning||j<0||j>=multiQueue.length||it.status==="完成"||multiQueue[j]?.status==="完成";
+   b.onclick=()=>{[multiQueue[i],multiQueue[j]]=[multiQueue[j],multiQueue[i]];drawMultiQueue();};line.append(b);
+  }
+  list.append(line);
+ });
+ $("batchInfo").textContent="总计："+multiQueue.length+"，完成："+multiQueue.filter(x=>x.status==="完成").length+"，失败："+multiQueue.filter(x=>x.status==="失败").length+"，待处理："+multiQueue.filter(x=>x.status==="待处理").length;
+ $("batchGo").disabled=multiRunning||!multiQueue.some(x=>x.status==="待处理")||!user;
+ $("batchRetry").disabled=multiRunning||!multiQueue.some(x=>x.status==="失败");
+ $("batchStop").disabled=!multiRunning;
+ $("batchClear").disabled=multiRunning;
+ $("batchFiles").disabled=multiRunning;
+}
+$("batchFiles").onchange=e=>{if(multiRunning)return;multiQueue=[...(e.target.files||[])].filter(x=>/\.(jpe?g|png|webp)$/i.test(x.name)).map((file,i)=>({file,label:"第"+(i+1)+"段",status:"待处理",error:""}));drawMultiQueue();};
+$("batchStop").onclick=()=>{multiStop=true;message("暂停请求已接收，当前母图上传完成后停止。");};
+$("batchRetry").onclick=()=>{for(const x of multiQueue)if(x.status==="失败"){x.status="待处理";x.error="";}drawMultiQueue();};
+$("batchClear").onclick=()=>{if(multiRunning)return;multiQueue=[];$("batchFiles").value="";drawMultiQueue();};
+async function multiDimensions(file){
+ const url=URL.createObjectURL(file);try{
+  return await new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve([im.naturalWidth,im.naturalHeight]);im.onerror=()=>reject(Error("无法读取图片尺寸"));im.src=url;});
+ }finally{URL.revokeObjectURL(url);}
+}
+async function uploadMultiItem(it,project,index){
+ const file=it.file;it.status="校验中";drawMultiQueue();
+ const hash=await sha256(file);
+ const {data:old,error:lookupErr}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupErr)throw lookupErr;
+ if(old){
+  if(old.project_id!==project.id)throw Error("相同原图已属于其他项目，请人工确认");
+  await verifyRemoteOriginal(file,old.storage_path,hash);return old;
+ }
+ const [w,height]=await multiDimensions(file);
+ const ext=/\.png$/i.test(file.name)?"png":/\.webp$/i.test(file.name)?"webp":"jpg";
+ const mime=ext==="png"?"image/png":ext==="webp"?"image/webp":"image/jpeg";
+ const path="masters/"+user.id+"/"+hash+"."+ext;
+ it.status="上传中";drawMultiQueue();$("uploadProgress").style.display="block";$("uploadProgress").value=0;
+ try{await uploadBytes(file,path);}catch(e){try{await verifyRemoteOriginal(file,path,hash);}catch(_){throw e;}}
+ const folder="masters/"+user.id,{data:files,error:storageErr}=await db.storage.from(BUCKET).list(folder,{limit:100,search:hash+"."+ext});
+ if(storageErr)throw storageErr;const match=files?.find(x=>x.name===hash+"."+ext);if(!match)throw Error("云端对象未找到");
+ const size=Number(match.metadata?.size??match.metadata?.contentLength??0);if(size&&size!==file.size)throw Error("云端字节数不符");
+ await verifyRemoteOriginal(file,path,hash);
+ const {data:again,error:againErr}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(againErr)throw againErr;
+ if(again){if(again.project_id!==project.id)throw Error("原图已关联其他项目");return again;}
+ const payload={created_by:user.id,project_id:project.id,part_index:index,part_label:it.label||null,title:project.title,author:project.author||null,era:project.era||null,source_url:project.source_url||null,original_filename:file.name,mime_type:mime,original_width:w,original_height:height,original_bytes:file.size,sha256:hash,storage_path:path};
+ const {data:saved,error:saveErr}=await db.from("artwork_masters").insert(payload).select("*").single();if(saveErr)throw saveErr;return saved;
+}
+$("batchGo").onclick=async()=>{
+ if(multiRunning||!multiQueue.some(x=>x.status==="待处理"))return;
+ if(!user||!$("workTitle").value.trim()){message("请先登录并选择项目或填写古画名称","err");return;}
+ multiRunning=true;multiStop=false;drawMultiQueue();
+ try{
+  const projectId=await resolveArtworkProject();
+  const {data:project,error:prErr}=await db.from("artwork_projects").select("*").eq("id",projectId).single();if(prErr)throw prErr;
+  const {data:parts,error:ptErr}=await db.from("artwork_masters").select("part_index").eq("project_id",projectId);if(ptErr)throw ptErr;
+  let next=Math.max(0,...(parts||[]).map(p=>Number(p.part_index)||0))+1;
+  for(const it of multiQueue){
+   if(multiStop)break;if(it.status!=="待处理")continue;
+   try{const result=await uploadMultiItem(it,project,next);next=Math.max(next,Number(result.part_index)||0)+1;it.status="完成";it.error="";}
+   catch(e){it.status="失败";it.error=e.message||String(e);}drawMultiQueue();
+  }
+  await fetchMasters();await loadProjects(projectId);
+  message("批量任务结束："+multiQueue.filter(x=>x.status==="完成").length+" 张完成，"+multiQueue.filter(x=>x.status==="失败").length+" 张失败。","ok");
+ }catch(e){message("批量上传无法继续："+e.message,"err");}
+ finally{multiRunning=false;$("uploadProgress").style.display="none";drawMultiQueue();}
+};
+drawMultiQueue();
+
 async function selectMaster(m){master=m;selectedCrop=null;setRectangle(null);const url=storageUrl(m.storage_path);if(!(selectedFile&&fileObjectURL&&sourceWidth===m.original_width&&sourceHeight===m.original_height)){await setImageUrl(url);}else{const localHash=await sha256(selectedFile);if(localHash!==m.sha256)await setImageUrl(url);}
 if(sourceWidth!==m.original_width||sourceHeight!==m.original_height)throw Error("云端母图分辨率不符合登记数据");
 $("workTitle").value=m.title;$("author").value=m.author||"";$("era").value=m.era||"";$("sourceUrl").value=m.source_url||"";
