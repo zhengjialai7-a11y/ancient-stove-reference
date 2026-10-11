@@ -78,6 +78,13 @@ code{font-size:12px;word-break:break-all}
 </div>
 <label for="file">选择本地原图 JPG / PNG / WebP（兼容 ZIP）</label>
 <input type="file" id="file" accept=".jpg,.jpeg,.png,.webp,.zip,image/jpeg,image/png,image/webp,application/zip">
+<div style="padding:10px;border:1px solid #ded8cc;border-radius:10px;margin-top:12px;background:#faf7ee">
+  <b>从下载文件夹快速读取（可选）</b>
+  <div class="muted" style="font-size:12px;margin:5px 0 8px">首次授权一次，只允许本网页读取所选文件夹；之后点击扫描即可选择刚下载的 JPEG。不会自动上传或删除本地文件。</div>
+  <div class="flex"><button id="authorizeDownloads" type="button" class="secondary">授权下载文件夹</button><button id="scanDownloads" type="button" class="secondary">扫描最近 JPEG</button></div>
+  <div class="flex" style="margin-top:7px"><select id="recentDownloads" aria-label="最近下载的图像" style="flex:1;min-width:140px"><option value="">尚未扫描</option></select><button id="useRecent" type="button" class="secondary">读取所选原图</button></div>
+  <small id="downloadFolderStatus" class="muted" role="status" aria-live="polite">也可以继续使用上面的文件选择框或拖入图片。</small>
+</div>
 <div id="zipRow" hidden><label for="zipChoice">ZIP 内请选择要入库的原图</label><select id="zipChoice"></select></div>
 <div id="fileMeta" class="muted" style="margin-top:8px">尚未选择文件</div>
 <div class="muted" id="fileCheck" aria-live="polite"></div>
@@ -212,6 +219,69 @@ try {const digest=await sha256(file);$("fileCheck").textContent="已核验本地
 message("原图已在浏览器读取。下一步填写作品信息并上传，不会调整原图片尺寸。","ok");}
 async function zipSelected(){const n=$("zipChoice").value,entry=zipFiles.find(x=>x.name===n);if(!entry)return;const f=await entry.async("blob");if(f.size>250*1024*1024)throw Error("图片超过当前250MB单文件处理上限");const ext=entry.name.toLowerCase().split(".").pop();const type=ext==="png"?"image/png":ext==="webp"?"image/webp":"image/jpeg";await loadFile(new File([f],entry.name.split("/").pop(),{type}));}
 async function chooseIncomingFile(file){try{if(!file)return;if(/\.zip$/i.test(file.name)){if(!window.JSZip)throw Error("ZIP 解压组件未加载");zipData=await JSZip.loadAsync(file);zipFiles=Object.values(zipData.files).filter(z=>!z.dir&&/\.(jpe?g|png|webp)$/i.test(z.name)&&!z.name.startsWith("__MACOSX/"));if(!zipFiles.length)throw Error("ZIP 里没有 JPG、PNG 或 WebP");$("zipRow").hidden=false;$("zipChoice").replaceChildren();zipFiles.forEach(f=>$("zipChoice").add(new Option(f.name,f.name)));await zipSelected();}else{$("zipRow").hidden=true;await loadFile(file);}}catch(err){$("fileCheck").textContent="";message(err.message,"err");}}
+// File System Access is opt-in. The chosen read-only handle is stored locally in IndexedDB;
+// filename and file bytes are never sent anywhere until the user explicitly uploads.
+let downloadFolder=null,recentImageFiles=[];
+const qs=new URLSearchParams(location.search),incomingSource=qs.get("source_url");
+if(/^https:\/\/g2\.ltfc\.net\/view\/SUHA\/[0-9a-f]{24}(?:[/?#]|$)/i.test(incomingSource||"")){$("sourceUrl").value=incomingSource;updateSourceShortcut();}
+function folderDB(){return new Promise((resolve,reject)=>{
+ const req=indexedDB.open("art-reference-selected-folders",1);
+ req.onupgradeneeded=()=>{if(!req.result.objectStoreNames.contains("handles"))req.result.createObjectStore("handles");};
+ req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+});}
+async function folderHandle(action,handle){
+ const dbi=await folderDB();
+ try{return await new Promise((resolve,reject)=>{
+  const tx=dbi.transaction("handles",action==="get"?"readonly":"readwrite");
+  const req=action==="get"?tx.objectStore("handles").get("downloads"):tx.objectStore("handles").put(handle,"downloads");
+  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+ });}finally{dbi.close();}
+}
+const folderStatus=text=>$("downloadFolderStatus").textContent=text;
+async function ensureFolder(){
+ if(!downloadFolder)downloadFolder=await folderHandle("get");
+ if(!downloadFolder)throw Error("请先点击「授权下载文件夹」并选择浏览器实际保存 JPEG 的文件夹");
+ let permission=await downloadFolder.queryPermission({mode:"read"});
+ if(permission!=="granted")permission=await downloadFolder.requestPermission({mode:"read"});
+ if(permission!=="granted")throw Error("尚未授权读取下载文件夹；也可以直接拖入 JPEG");
+ return downloadFolder;
+}
+$("authorizeDownloads").onclick=async()=>{
+ if(typeof window.showDirectoryPicker!=="function"){folderStatus("当前浏览器不支持授权文件夹，请使用原有的文件选择或拖入");return;}
+ try{
+  const handle=await window.showDirectoryPicker({id:"art-reference-downloads",mode:"read"});
+  downloadFolder=handle;await folderHandle("put",handle);
+  folderStatus("已授权「"+handle.name+"」：仅读取此文件夹，不自动上传和删除。");
+ }catch(e){if(e.name!=="AbortError")folderStatus("授权失败："+e.message);}
+};
+async function scanDownloadedImages(){
+ const handle=await ensureFolder(),found=[];let checked=0;
+ for await(const [name,entry] of handle.entries()){
+  if(++checked>4000)break;
+  if(entry.kind!=="file"||!(/\.(?:jpe?g|png|webp)$/i.test(name)))continue;
+  try{const file=await entry.getFile();if(file.size>0)found.push({file,name,lastModified:file.lastModified});}catch(e){}
+ }
+ found.sort((a,b)=>b.lastModified-a.lastModified);
+ recentImageFiles=found.slice(0,30);
+ const choice=$("recentDownloads");choice.replaceChildren();
+ if(!recentImageFiles.length){choice.add(new Option("文件夹内没有可读取的 JPEG/PNG/WebP",""));throw Error("目录中没有找到图片，请检查是否选择了真正的下载文件夹");}
+ for(let i=0;i<recentImageFiles.length;i++){const file=recentImageFiles[i].file;choice.add(new Option(file.name+" · "+formatBytes(file.size),String(i)));}
+ folderStatus("找到 "+found.length+" 张图像；按修改时间从新到旧排列。确认文件名后点击「读取所选原图」。");
+}
+$("scanDownloads").onclick=async()=>{try{folderStatus("正在扫描文件夹…");await scanDownloadedImages();}catch(e){folderStatus(e.message);}};
+$("useRecent").onclick=async()=>{
+ try{
+  if(!recentImageFiles.length)await scanDownloadedImages();
+  const file=recentImageFiles[Number($("recentDownloads").value)||0]?.file;
+  if(!file)throw Error("请选择图片");
+  await chooseIncomingFile(file);
+  const m=file.name.match(/^([^_]{1,12})_([^_]{1,30})_(.+?)(?:_\d+(?: \(\d+\))?)?\.(?:jpe?g|png|webp)$/i);
+  if(m&&!$("workTitle").value.trim()){
+    $("era").value=m[1];$("author").value=m[2];$("workTitle").value=m[3];
+  }
+  folderStatus("已在工作台读取「"+file.name+"」。请检查原始像素尺寸与作品信息，再点击上传高清母图。");
+ }catch(e){folderStatus("读取失败："+e.message);}
+};
 $("file").onchange=e=>chooseIncomingFile(e.target.files?.[0]);
 const dropZone=$("dropZone");
 dropZone.addEventListener("click",()=>$("file").click());
