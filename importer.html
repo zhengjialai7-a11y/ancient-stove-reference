@@ -125,7 +125,7 @@ code{font-size:12px;word-break:break-all}
 <section>
 <h2>③ 分类审核与裁切草稿</h2>
 <label for="cropTitle">参考标题</label><input id="cropTitle" placeholder="如：《货郎图》·多层框格货担">
-<div class="flex"><div style="flex:1 1 240px"><label for="category">参考大类</label><select id="category"></select></div><div style="flex:1 1 240px"><label for="subCategory">细分类型</label><select id="subCategory"><option value="">请选择细分类</option></select><div id="newSubtypePanel" hidden style="margin-top:8px"><input id="newSubtypeName" maxlength="60" placeholder="输入新的细分类名称"><button type="button" id="addSubtype" class="secondary" style="margin-top:6px">保存并选择新细分类</button></div><small id="subtypeHint" class="muted">建筑类可选择围栏、门窗、宝顶等标准细类，也可输入自定义细分。</small></div></div>
+<div class="flex"><div style="flex:1 1 240px"><label for="category">参考大类</label><select id="category"></select></div><div style="flex:1 1 240px"><label for="subCategory">细分类型</label><select id="subCategory"><option value="">请选择细分类</option></select><div id="newSubtypePanel" hidden style="margin-top:8px"><input id="newSubtypeName" maxlength="60" placeholder="输入新的细分类名称"><button type="button" id="addSubtype" class="secondary" style="margin-top:6px">保存并选择新细分类</button></div><small id="subtypeHint" class="muted">按主要对象选择细分类；没有所需选项时可新增。</small></div></div>
 <label for="target">发布目标</label><select id="target"><option value="">新建一条参考（不覆盖原记录）</option></select>
 <p class="muted">选择已有记录时，发布将保留其 ID、标题、原有分类和说明，只替换图片及裁切坐标，并备份旧数据。</p>
 <div class="flex"><button id="saveCrop" disabled>保存裁切草稿</button><button class="secondary" id="newCrop">开始新裁切</button></div>
@@ -178,7 +178,7 @@ function autoSaveCropMetadata(){
  const data={title:$("cropTitle").value.trim(),category_id:$("category").value,
  sub_category:$("subCategory").value.trim()||null,target_reference_id:$("target").value||null,
  updated_at:new Date().toISOString()};
- if(!data.title||!data.category_id){cropSaveFailed=true;feedback.textContent="标题及参考大类不能为空，未保存；请填写完整";return Promise.reject(Error("标题及分类不能为空"));}
+ if(!data.title||!data.category_id||data.sub_category==="__add__"){cropSaveFailed=true;feedback.textContent="请填写标题和大类，并先保存新增细分类";return Promise.reject(Error("标题及分类未填写完整"));}
  feedback.textContent="正在保存参考标题及分类…";
  pendingCropSave=pendingCropSave.catch(()=>{}).then(async()=>{
   const {data:updated,error}=await db.from("artwork_crops").update(data)
@@ -285,8 +285,8 @@ $("workTitle").value=m.title;$("author").value=m.author||"";$("era").value=m.era
 showSize();updateSourceShortcut();await loadCandidates();await loadDrafts();$("applyPreset").hidden=m.sha256!=="9894f41227243f9c949058b93947527e6c1ceed11217fbc234d137adad7d5af7";$("saveCrop").disabled=false;applyZoom();}
 $("masterList").onchange=async()=>{try{const id=$("masterList").value;if(!id)return;const {data,error}=await db.from("artwork_masters").select("*").eq("id",id).single();if(error)throw error;await selectMaster(data);message("已恢复高清母图和全部裁切草稿。","ok");}catch(e){message(e.message,"err");}};
 let subtypes=[];
-function updateSubtypeOptions(){
- const catId=$("category").value,box=$("subCategory"),current=box.value;box.replaceChildren(new Option("请选择细分类",""));
+function updateSubtypeOptions(preserveCurrent=true){
+ const catId=$("category").value,box=$("subCategory"),current=preserveCurrent?box.value:"";box.replaceChildren(new Option("请选择细分类",""));
  const names=[...new Set([...subtypes.filter(s=>s.category_id===catId).map(s=>s.name),...drafts.filter(d=>d.category_id===catId).map(d=>d.sub_category).filter(Boolean)])];
  for(const name of names)box.add(new Option(name,name));
  if(current&&!names.includes(current))box.add(new Option(current,current));
@@ -319,7 +319,7 @@ async function loadCropHistory(cropId){
  if(base&&latest&&changes.length){const area1=base.w*base.h,area2=latest.w*latest.h;const delta=Math.round((area2/area1-1)*100);summary+=" · 相对初始面积："+(delta>=0?"+":"")+delta+"%";}
  box.textContent=summary;
 }
-function openCrop(c){if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}if(selectedCrop!==c.id&&cropSaveFailed){alert("上一处裁切保存失败，请先重试保存再切换");return;}selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;updateSubtypeOptions();if(c.sub_category&&!Array.from($("subCategory").options).some(o=>o.value===c.sub_category))$("subCategory").add(new Option(c.sub_category,c.sub_category));$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";$("autoSaveState").textContent=c.status==="draft"?"已选择「"+c.title+"」，重新框选后自动保存到此记录。":"此参考已经发布；不能通过草稿自动修改。";renderDrafts();if(c.status==="draft")loadCropHistory(c.id);else $("editHistory").textContent="这条参考已经发布；点击其他待审核草稿查看编辑记录。";}
+function openCrop(c){if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}if(selectedCrop!==c.id&&cropSaveFailed){alert("上一处裁切保存失败，请先重试保存再切换");return;}selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;updateSubtypeOptions(false);if(c.sub_category&&!Array.from($("subCategory").options).some(o=>o.value===c.sub_category))$("subCategory").add(new Option(c.sub_category,c.sub_category));$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";$("autoSaveState").textContent=c.status==="draft"?"已选择「"+c.title+"」，重新框选后自动保存到此记录。":"此参考已经发布；不能通过草稿自动修改。";renderDrafts();if(c.status==="draft")loadCropHistory(c.id);else $("editHistory").textContent="这条参考已经发布；点击其他待审核草稿查看编辑记录。";}
 function renderDrafts(){const list=$("cropItems");list.replaceChildren();if(!drafts.length){const p=document.createElement("p");p.className="muted";p.textContent="尚无局部。先框选范围并保存草稿。";list.append(p);return;}
 drafts.forEach(c=>{const row=document.createElement("div");row.className="crop-card"+(selectedCrop===c.id?" sel":"");
 const left=document.createElement("div");const name=document.createElement("b");name.textContent=c.title;const meta=document.createElement("small");meta.textContent=c.x+","+c.y+" · "+c.w+"×"+c.h+" px · "+(c.target_reference_id?"替换旧参考":"新增参考");left.append(name,meta);
@@ -364,9 +364,9 @@ $("addSubtype").onclick=async()=>{
   scheduleCropMetadataSave();message("细分类「"+name+"」已保存，当前草稿已选择该分类。","ok");
  }catch(e){message("新增细分类失败："+e.message,"err");}finally{button.disabled=false;}
 };
-$("category").addEventListener("change",()=>{updateSubtypeOptions();scheduleCropMetadataSave();});$("target").addEventListener("change",scheduleCropMetadataSave);
+$("category").addEventListener("change",()=>{updateSubtypeOptions(false);scheduleCropMetadataSave();});$("target").addEventListener("change",scheduleCropMetadataSave);
 $("newCrop").onclick=()=>{if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}if(cropSaveFailed)return alert("上一处裁切保存失败，请重新框选或保存");selectedCrop=null;setRectangle(null);$("cropTitle").value="";$("subCategory").value="";$("newSubtypePanel").hidden=true;$("target").value="";renderDrafts();};
-$("saveCrop").onclick=async()=>{if(busy)return;setBusy(true);try{if(!master)throw Error("请先上传或选择母图");if(!checkRect())throw Error("裁切超出母图边界或尺寸为空");const title=$("cropTitle").value.trim(),category_id=$("category").value;if(!title||!category_id)throw Error("请填写参考标题和分类");const payload={master_id:master.id,title,category_id,sub_category:$("subCategory").value.trim()||null,x:rectangle.x,y:rectangle.y,w:rectangle.w,h:rectangle.h,target_reference_id:$("target").value||null,updated_at:new Date().toISOString()};
+$("saveCrop").onclick=async()=>{if(busy)return;setBusy(true);try{if(!master)throw Error("请先上传或选择母图");if(!checkRect())throw Error("裁切超出母图边界或尺寸为空");const title=$("cropTitle").value.trim(),category_id=$("category").value;if(!title||!category_id||$("subCategory").value==="__add__")throw Error("请填写参考标题和分类，并先保存新增细分类");const payload={master_id:master.id,title,category_id,sub_category:$("subCategory").value.trim()||null,x:rectangle.x,y:rectangle.y,w:rectangle.w,h:rectangle.h,target_reference_id:$("target").value||null,updated_at:new Date().toISOString()};
 if(selectedCrop){const {error}=await db.from("artwork_crops").update(payload).eq("id",selectedCrop).eq("status","draft");if(error)throw error;}else{const {data,error}=await db.from("artwork_crops").insert(payload).select("id").single();if(error)throw error;selectedCrop=data.id;}
 await loadDrafts();message("裁切草稿已保存。尚未修改正式图库，审核后才发布。","ok");
 }catch(e){message(e.message,"err");}finally{setBusy(false);}};

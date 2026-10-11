@@ -175,7 +175,7 @@ h1{font-size:22px;margin:0 0 2px}.sub{font-size:11px;color:var(--muted)}
 <div class="formgrid">
 <div><label>标题 *</label><input id="fTitle"></div>
 <div><label>大类 *</label><select id="fCategory"></select></div>
-<div><label>细分</label><input id="fSubCategory" placeholder="例如：书柜 / 多宝格 / 琴桌 / 折屏"></div>
+<div><label>细分</label><select id="fSubCategory"></select><div id="newReferenceSubtypePanel" hidden><input id="newReferenceSubtypeName" maxlength="60" placeholder="输入新的细分类名称"><button class="mini" id="addReferenceSubtype" type="button">保存并选择</button></div></div>
 <div class="full"><label for="fFile">上传图片</label><input id="fFile" type="file" accept="image/*">
 <div class="image-paste-area" id="imagePasteArea" tabindex="0" role="group" aria-label="粘贴图片区域">复制图片后，点击这里按 Ctrl+V 粘贴（Mac：⌘+V）。也可以在本窗口直接粘贴图片。</div>
 <div class="status" id="imageUploadStatus" role="status" aria-live="polite"></div>
@@ -201,7 +201,7 @@ const SUPABASE_KEY="sb_publishable_hA9UHbP834axMbvdRRbwyA_4dUTU2-B";
 const APP_URL="https://zhengjialai7-a11y.github.io/ancient-stove-reference/";
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=s=>document.querySelector(s);
-let categories=[],refs=[],user=null,activeCategory="全部参考",editingId=null,currentDetailId=null;
+let categories=[],refs=[],subtypes=[],user=null,activeCategory="全部参考",editingId=null,currentDetailId=null;
 let editingCategoryId=null,categorySaving=false;
 let pendingImageFile=null,pendingImagePreviewUrl=null,itemSaving=false;
 
@@ -211,13 +211,15 @@ document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>closeModal(b.
 document.querySelectorAll(".modal").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)closeModal(m.id)}));
 
 async function loadAll(){
- const [{data:c,error:ce},{data:r,error:re}]=await Promise.all([
+ const [{data:c,error:ce},{data:r,error:re},{data:s,error:se}]=await Promise.all([
    db.from("categories").select("*").order("sort_order"),
-   db.from("references").select("*,categories(id,name)").order("created_at",{ascending:false})
+   db.from("references").select("*,categories(id,name)").order("created_at",{ascending:false}),
+   db.from("category_subtypes").select("category_id,name,sort_order").order("sort_order")
  ]);
  if(ce||re){console.error(ce||re);return}
  const activeId=categories.find(x=>x.name===activeCategory)?.id;
- categories=c||[];refs=(r||[]).map(x=>({...x,category:x.categories?.name||"其他"}));
+ categories=c||[];refs=(r||[]).map(x=>({...x,category:x.categories?.name||"待识别"}));
+ if(se){console.error(se);}else{subtypes=s||[];}
  if(activeId)activeCategory=categories.find(x=>x.id===activeId)?.name||"全部参考";
  fillFilters();renderCategories();render();syncDetailFromHash();
 }
@@ -226,14 +228,26 @@ function fillFilters(){
  $("#era").innerHTML='<option value="">全部年代</option>';$("#type").innerHTML='<option value="">全部类型</option>';$("#subCategoryFilter").innerHTML='<option value="">全部细分</option>';$("#sourceSite").innerHTML='<option value="">全部来源</option>';
  [...new Set(refs.map(x=>x.era).filter(Boolean))].sort().forEach(v=>$("#era").add(new Option(v,v)));
  [...new Set(refs.map(x=>x.type).filter(Boolean))].sort().forEach(v=>$("#type").add(new Option(v,v)));
- [...new Set([...architectureSubtypes,...refs.map(x=>x.sub_category).filter(Boolean)])].sort().forEach(v=>$("#subCategoryFilter").add(new Option(v,v)));
+ [...new Set([...subtypes.map(x=>x.name),...refs.map(x=>x.sub_category).filter(Boolean)])].sort().forEach(v=>$("#subCategoryFilter").add(new Option(v,v)));
  [...new Set(refs.map(x=>x.source_site).filter(Boolean))].sort().forEach(v=>$("#sourceSite").add(new Option(v,v)));
  $("#era").value=ev;$("#type").value=tv;$("#subCategoryFilter").value=subv;$("#sourceSite").value=sv;
  const selectedCategory=$("#fCategory").value;
  $("#fCategory").innerHTML="";categories.forEach(c=>$("#fCategory").add(new Option(c.name,c.id)));
  if(categories.some(c=>c.id===selectedCategory))$("#fCategory").value=selectedCategory;
+ updateReferenceSubtypeOptions($("#fSubCategory").value);
 }
-const architectureSubtypes=["建筑整体","庭院与建筑群","廊道","桥梁","围墙","围栏与栏杆","门窗","屋顶与屋檐","宝顶与屋脊装饰","柱与柱础","梁架与斗拱","台基与台阶","建筑装饰","棚架与营帐","待确认"];
+function categorySubtypeNames(name){
+ const id=categories.find(c=>c.name===name)?.id;
+ return [...new Set([...subtypes.filter(s=>s.category_id===id).map(s=>s.name),...refs.filter(r=>r.category_id===id).map(r=>r.sub_category).filter(Boolean)])];
+}
+function updateReferenceSubtypeOptions(current=""){
+ const box=$("#fSubCategory"),name=categories.find(c=>c.id===$("#fCategory").value)?.name;
+ const names=categorySubtypeNames(name);box.replaceChildren(new Option("请选择细分类",""));
+ names.forEach(n=>box.add(new Option(n,n)));
+ if(current&&!names.includes(current))box.add(new Option(current,current));
+ box.add(new Option("＋新增细分类…","__add__"));box.value=current;
+ $("#newReferenceSubtypePanel").hidden=true;
+}
 let expandedCategories=new Set(["建筑"]);
 function renderCategories(){
  const box=$("#categories"),scrollTop=box.scrollTop;box.replaceChildren();
@@ -241,36 +255,34 @@ function renderCategories(){
  const chooseCategory=(name,sub)=>{
    activeCategory=name;
    $("#subCategoryFilter").value=sub||"";
-   if(name==="建筑")expandedCategories.add("建筑");
+   if(sub)expandedCategories.add(name);
    sanitizeSearch();closeDetailPage(true);renderCategories();render();$(".main").scrollTo({top:0});
  };
  ["全部参考",...categories.map(c=>c.name)].forEach(name=>{
    const n=name==="全部参考"?refs.length:refs.filter(x=>x.category===name).length;
-   const b=document.createElement("button");b.className="cat"+(name===activeCategory&&!(name==="建筑"&&chosenSub)?" active":"");
+   const b=document.createElement("button");b.className="cat"+(name===activeCategory&&!chosenSub?" active":"");
    b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';
    b.onclick=()=>chooseCategory(name,null);
    const row=document.createElement("div");row.className="cat-row";row.append(b);
-   if(name==="建筑"){
+   if(name!=="全部参考"&&categorySubtypeNames(name).length){
      const expand=document.createElement("button");
      expand.className="cat-expander";
-     expand.setAttribute("aria-label",expandedCategories.has(name)?"收起建筑细分类":"展开建筑细分类");
+     expand.setAttribute("aria-label",(expandedCategories.has(name)?"收起":"展开")+name+"细分类");
      expand.setAttribute("aria-expanded",expandedCategories.has(name)?"true":"false");
      expand.textContent=expandedCategories.has(name)?"▾":"▸";
      expand.onclick=()=>{expandedCategories.has(name)?expandedCategories.delete(name):expandedCategories.add(name);renderCategories();};
      row.prepend(expand);
    }
    box.append(row);
-   if(name==="建筑"&&expandedCategories.has(name)){
+   if(name!=="全部参考"&&expandedCategories.has(name)){
      const list=document.createElement("div");list.className="subcat-list";
-     const known=new Set(architectureSubtypes);
-     const existing=[...new Set(refs.filter(x=>x.category==="建筑").map(x=>x.sub_category).filter(Boolean))];
-     const labels=[...architectureSubtypes,...existing.filter(x=>!known.has(x)).sort()];
+     const labels=categorySubtypeNames(name);
      labels.forEach(sub=>{
-       const count=refs.filter(x=>x.category==="建筑"&&x.sub_category===sub).length;
+       const count=refs.filter(x=>x.category===name&&x.sub_category===sub).length;
        const item=document.createElement("button");
-       item.className="cat subcat"+(activeCategory==="建筑"&&chosenSub===sub?" active":"");
+       item.className="cat subcat"+(activeCategory===name&&chosenSub===sub?" active":"");
        item.innerHTML='<span>'+esc(sub)+'</span><span class="count">'+count+'</span>';
-       item.onclick=()=>chooseCategory("建筑",sub);
+       item.onclick=()=>chooseCategory(name,sub);
        list.append(item);
      });
      box.append(list);
@@ -638,7 +650,7 @@ $("#itemModal").addEventListener("paste",e=>{
  selectPendingImage(new File([file],"粘贴图片-"+Date.now()+"."+ext,{type:file.type}),"paste");
 });
 function clearForm(){clearPendingImage();["fTitle","fSubCategory","fImage","fSource","fEra","fType","fInstitution","fFocus","fTags","fNote"].forEach(id=>$("#"+id).value="");$("#saveMsg").textContent=""}
-function editItem(x){if(itemSaving)return;clearForm();editingId=x.id;$("#itemModalTitle").textContent="编辑参考";$("#fTitle").value=x.title||"";$("#fCategory").value=x.category_id;$("#fSubCategory").value=x.sub_category||"";$("#fImage").value=x.image_url||"";$("#fSource").value=x.source_url||"";$("#fEra").value=x.era||"";$("#fType").value=x.type||"";$("#fInstitution").value=x.institution||"";$("#fFocus").value=x.focus||"";$("#fTags").value=(x.tags||[]).join(", ");$("#fNote").value=x.note||"";openModal("itemModal")}
+function editItem(x){if(itemSaving)return;clearForm();editingId=x.id;$("#itemModalTitle").textContent="编辑参考";$("#fTitle").value=x.title||"";$("#fCategory").value=x.category_id;updateReferenceSubtypeOptions(x.sub_category||"");$("#fImage").value=x.image_url||"";$("#fSource").value=x.source_url||"";$("#fEra").value=x.era||"";$("#fType").value=x.type||"";$("#fInstitution").value=x.institution||"";$("#fFocus").value=x.focus||"";$("#fTags").value=(x.tags||[]).join(", ");$("#fNote").value=x.note||"";openModal("itemModal")}
 async function deleteItem(x){if(!confirm("确定删除“"+x.title+"”吗？"))return;const {error}=await db.from("references").delete().eq("id",x.id);if(error)alert(error.message)}
 async function uploadImage(file){
  const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"");
@@ -652,6 +664,7 @@ async function saveItem(){
  if(!user)return alert("请先登录");
  const title=$("#fTitle").value.trim(),category_id=$("#fCategory").value,file=pendingImageFile;let image_url=$("#fImage").value.trim();
  if(!title||!category_id)return alert("标题和大类为必填");
+ if($("#fSubCategory").value==="__add__")return alert("请先保存新细分类");
  itemSaving=true;$("#saveItem").disabled=true;$("#fFile").disabled=true;$("#clearPendingImageBtn").disabled=true;$("#saveMsg").textContent="正在保存…";
  try{
    if(file)image_url=await uploadImage(file);
@@ -735,7 +748,24 @@ $("#resendBtn").onclick=async()=>{
 $("#addCategoryBtn").onclick=()=>openCategoryModal();
 $("#renameCategoryBtn").onclick=()=>{const category=categories.find(c=>c.name===activeCategory)||categories[0];if(category)openCategoryModal(category)};
 $("#renameCategorySelect").onchange=()=>{const category=categories.find(c=>c.id===$("#renameCategorySelect").value);if(category)openCategoryModal(category)};
-$("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
+$("#fCategory").onchange=()=>updateReferenceSubtypeOptions();
+$("#fSubCategory").onchange=()=>{
+ if($("#fSubCategory").value==="__add__"){$("#newReferenceSubtypePanel").hidden=false;$("#newReferenceSubtypeName").focus();}
+ else $("#newReferenceSubtypePanel").hidden=true;
+};
+$("#addReferenceSubtype").onclick=async()=>{
+ if(!user)return;
+ const name=$("#newReferenceSubtypeName").value.trim(),category_id=$("#fCategory").value;
+ if(!name||name.length>60||name==="__add__")return alert("请输入有效的细分类名称");
+ const button=$("#addReferenceSubtype");button.disabled=true;
+ try{
+  const {error}=await db.from("category_subtypes").upsert({category_id,name},{onConflict:"category_id,name",ignoreDuplicates:true});
+  if(error)throw error;
+  if(!subtypes.some(s=>s.category_id===category_id&&s.name===name))subtypes.push({category_id,name});
+  updateReferenceSubtypeOptions(name);$("#newReferenceSubtypeName").value="";fillFilters();renderCategories();
+ }catch(e){alert("细分类保存失败："+e.message);}finally{button.disabled=false;}
+};
+$("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;updateReferenceSubtypeOptions();openModal("itemModal")};
 $("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
 ["q","era","type","subCategoryFilter","sourceSite"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",()=>{if(id==="subCategoryFilter")renderCategories();render();}));
 $("#clearFiltersBtn").onclick=clearFilters;
@@ -746,6 +776,7 @@ setTimeout(()=>{sanitizeSearch();render()},1200);
 db.auth.onAuthStateChange(()=>refreshAuth());
 db.channel("art-reference-live")
  .on("postgres_changes",{event:"*",schema:"public",table:"categories"},()=>loadAll())
+ .on("postgres_changes",{event:"*",schema:"public",table:"category_subtypes"},()=>loadAll())
  .on("postgres_changes",{event:"*",schema:"public",table:"references"},()=>loadAll())
  .subscribe();
 setInterval(loadAll,30000);

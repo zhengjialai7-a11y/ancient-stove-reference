@@ -24,7 +24,7 @@ function setup(){
  let uploadError=null,holdUpload=null;
  const db={storage:{from:()=>({upload:async(path,file,opts)=>{uploads.push({path,file,opts});if(holdUpload)await holdUpload;return {error:uploadError}},getPublicUrl:path=>({data:{publicUrl:'https://fixture.test/'+path}})})},
   from:()=>({update:payload=>({eq:async(_,id)=>{writes.push({id,payload});return {error:null}}}),insert:async payload=>{writes.push({payload});return {error:null}}})};
- const ctx=vm.createContext({$,File,Date,URL:{createObjectURL:()=>`blob:fixture-${uploads.length}-${Math.random()}`,revokeObjectURL:url=>revoked.push(url)},crypto:{randomUUID:()=> 'fixture-id'},db,alert:message=>{throw Error(message)},loadAll:async()=>{}});
+ const ctx=vm.createContext({$,File,Date,URL:{createObjectURL:()=>`blob:fixture-${uploads.length}-${Math.random()}`,revokeObjectURL:url=>revoked.push(url)},crypto:{randomUUID:()=> 'fixture-id'},db,alert:message=>{throw Error(message)},loadAll:async()=>{},updateReferenceSubtypeOptions:current=>get('#fSubCategory').value=current});
  function $(s){return get(s)}
  vm.runInContext('let pendingImageFile=null,pendingImagePreviewUrl=null,itemSaving=false,editingId=null;let refs=[];let user={id:"fixture-user"};',ctx);
  vm.runInContext(modalCode+'\n'+formCode+'\n'+saveCode,ctx);
