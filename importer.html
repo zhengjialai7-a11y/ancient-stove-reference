@@ -459,7 +459,14 @@ async function showProjectParts(){
 }
 $("projectSelect").onchange=async()=>{
  const p=projects.find(p=>p.id===$("projectSelect").value);
- if(p){$("workTitle").value=p.title;$("author").value=p.author||"";$("era").value=p.era||"";$("sourceUrl").value=p.source_url||"";updateSourceShortcut();}
+ if(p){
+ const fallback=projectMasters.find(m=>m.project_id===p.id)||null;
+ $("workTitle").value=p.title||fallback?.title||"";
+ $("author").value=p.author||fallback?.author||"";
+ $("era").value=p.era||fallback?.era||"";
+ $("sourceUrl").value=p.source_url||fallback?.source_url||"";
+ updateSourceShortcut();
+}
  await showProjectParts();
 };
 async function resolveArtworkProject(){
@@ -493,7 +500,18 @@ message("无损校验通过：上传前后 SHA-256 完全一致；"+saved.origin
 async function selectMaster(m){master=m;selectedCrop=null;setRectangle(null);const url=storageUrl(m.storage_path);if(!(selectedFile&&fileObjectURL&&sourceWidth===m.original_width&&sourceHeight===m.original_height)){await setImageUrl(url);}else{const localHash=await sha256(selectedFile);if(localHash!==m.sha256)await setImageUrl(url);}
 if(sourceWidth!==m.original_width||sourceHeight!==m.original_height)throw Error("云端母图分辨率不符合登记数据");
 $("workTitle").value=m.title;$("author").value=m.author||"";$("era").value=m.era||"";$("sourceUrl").value=m.source_url||"";
-if(m.project_id){$("projectSelect").value=m.project_id;await showProjectParts();}showSize();updateSourceShortcut();await loadCandidates();await loadDrafts();$("applyPreset").hidden=m.sha256!=="9894f41227243f9c949058b93947527e6c1ceed11217fbc234d137adad7d5af7";$("saveCrop").disabled=false;applyZoom();}
+if(m.project_id){
+ $("projectSelect").value=m.project_id;
+ const p=projects.find(p=>p.id===m.project_id);
+ if(p){
+   $("workTitle").value=p.title||m.title||"";
+   $("author").value=p.author||m.author||"";
+   $("era").value=p.era||m.era||"";
+   $("sourceUrl").value=p.source_url||m.source_url||"";
+ }
+ await showProjectParts();
+}
+showSize();updateSourceShortcut();await loadCandidates();await loadDrafts();$("applyPreset").hidden=m.sha256!=="9894f41227243f9c949058b93947527e6c1ceed11217fbc234d137adad7d5af7";$("saveCrop").disabled=false;applyZoom();}
 $("masterList").onchange=async()=>{try{const id=$("masterList").value;if(!id)return;const {data,error}=await db.from("artwork_masters").select("*").eq("id",id).single();if(error)throw error;await selectMaster(data);message("已恢复高清母图和全部裁切草稿。","ok");}catch(e){message(e.message,"err");}};
 let subtypes=[];
 function updateSubtypeOptions(preserveCurrent=true){
