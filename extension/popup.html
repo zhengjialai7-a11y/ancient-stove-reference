@@ -1,0 +1,17 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+*{box-sizing:border-box}body{width:350px;background:#faf8f3;color:#27231e;font:13px/1.5 system-ui,"Microsoft YaHei",sans-serif;margin:0;padding:16px}
+h2{font-size:18px;margin:0 0 7px}p{margin:7px 0 12px}.box{border:1px solid #ddd0bf;border-radius:9px;background:white;padding:10px;margin:9px 0}.box strong{font-size:13px}
+.state{padding-top:5px;color:#4a4138;white-space:pre-wrap;word-break:break-word}.muted{color:#736e66;font-size:12px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+button{border:1px solid #d2c7b9;background:#fff;border-radius:8px;padding:9px 6px;cursor:pointer;width:100%;font-size:12px}button.primary{background:#6f4c2f;color:#fff;border-color:#6f4c2f;margin:8px 0}
+#connection{font-weight:650}.tip{background:#f1e8d9;border-radius:8px;padding:8px;font-size:12px;margin-top:8px}
+</style></head><body>
+<h2>原图采集助手 <span class="muted">v0.4.0</span></h2>
+<p class="muted">只读记录收藏夹正常加载的作品列表 + 下载诊断；不自动下载上传。</p>
+<div class="box"><strong>① 网页监听</strong><div class="state" id="connection">正在检查…</div><div class="state" id="attempt">尚未检测到下载按钮操作</div></div>
+<div class="box"><strong>② 浏览器下载任务</strong><div class="state" id="download">尚未检测到下载任务</div></div>
+<div class="box"><strong>③ 诊断结论</strong><div class="state" id="diagnosis">请先在作品页点击网站下载按钮。</div></div>
+<div class="box"><strong>④ 收藏夹作品清单（测试）</strong><div class="muted">请先在中华珍宝馆打开你登录后的收藏夹页面，滚动加载全部作品，再点击扫描。它将你实际点击跳转的 sourceId 与收藏顺序保存；不会推测未确认作品的 ID，不提取账号密码。</div><div class="actions" style="margin-top:8px"><button id="scanFavorites">扫描当前页</button><button id="exportFavorites">导出已验证 JSON</button></div><div class="state" id="responseStatus">尚未捕获收藏列表数据，请刷新收藏夹网页后再点击扫描。</div><div class="state" id="favorites">尚未扫描。页面若采用隐藏接口或无限滚动，可能需要先加载所有作品。</div></div><div class="actions"><button id="refresh">刷新诊断</button><button id="downloads">打开浏览器下载记录</button><button id="copy">复制诊断信息</button><button id="clear">清空本次记录</button></div>
+<button id="openQueue" class="primary">⑤ 打开收藏夹采集队列（新）</button>
+<button id="openImporter" class="primary">打开高清母图上传工作台</button>
+<div class="tip">首次安装或更新后，先<strong>刷新中华珍宝馆作品页面</strong>，再点击其正常下载按钮。下载按钮有反应但无浏览器下载任务时，插件会明确标记。</div>
+<script src="popup.js"></script></body></html>

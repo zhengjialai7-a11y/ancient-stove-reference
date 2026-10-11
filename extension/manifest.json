@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "美术绘制参考 · 原图采集助手",
+  "version": "0.5.0",
+  "description": "收藏队列与高清母图工作台共用云端数据，自动关联母图、核验与草稿进度",
+  "permissions": [
+    "downloads",
+    "tabs",
+    "storage",
+    "scripting",
+    "webNavigation"
+  ],
+  "host_permissions": [
+    "https://*.ltfc.net/*",
+    "https://zhengjialai7-a11y.github.io/ancient-stove-reference/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "美术绘制参考 · 收藏采集队列"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.ltfc.net/resource_favorites*"
+      ],
+      "js": [
+        "favorites_bridge.js"
+      ],
+      "all_frames": false,
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://*.ltfc.net/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html*"
+      ],
+      "js": [
+        "sync_bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}

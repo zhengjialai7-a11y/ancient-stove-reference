@@ -6,6 +6,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="capture-common.js?v=0.5.0"></script>
 <style>
 :root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#282620;--sub:#766f64;--line:#ded8cc;--accent:#6f4c2f;--green:#316f57}
 *{box-sizing:border-box}
@@ -104,7 +105,7 @@ button[aria-pressed="true"]{background:#ebe1d2;color:#5a3e25;border-color:#b99b7
 <body>
 <header>
 <div><h1>高清母图 · 无损拆分工作台</h1><div class="muted">原图直存 · 像素框选 · 审核后发布</div></div>
-<div class="flex"><a href="./index.html">← 返回「美术绘制参考」</a><span id="authState" class="muted">检查登录状态…</span><button id="logout" class="secondary small" hidden>退出</button></div>
+<div class="flex"><a href="./index.html">← 返回「美术绘制参考」</a><a href="./queue.html">收藏采集队列 ↗</a><span id="authState" class="muted">检查登录状态…</span><button id="logout" class="secondary small" hidden>退出</button></div>
 </header>
 <main>
 <div id="status" aria-live="polite">请先登录。页面与原图库共用登录状态。</div>
@@ -114,6 +115,7 @@ button[aria-pressed="true"]{background:#ebe1d2;color:#5a3e25;border-color:#b99b7
 <p class="muted">只能登录后上传与发布；账号与原图库通用。不要在聊天中发送密码或密钥。</p>
 </section>
 <div id="workPanel" hidden>
+<section id="captureContext" class="safe"><div class="flex"><strong>收藏队列关联</strong><a href="./queue.html">查看全部任务 →</a><button id="verifyStoredMaster" class="secondary small" type="button" disabled>回读核验当前母图</button></div><div id="captureSummary" class="muted" role="status" aria-live="polite">选择项目后自动显示关联队列状态。</div></section>
 <section class="project-bar">
 <div class="project-picker"><label for="projectSelect">当前古画项目</label><select id="projectSelect"><option value="">＋新建古画项目</option></select></div>
 <div class="project-context"><strong id="projectSummary">先选择已有项目，或新建项目导入母图</strong><span id="activeMasterSummary" class="muted">尚未打开母图</span></div>
@@ -253,7 +255,7 @@ function updateWorkspaceControls(){
  $("saveCrop").disabled=locked||!master||!user||viewedCropStatus==="published";
  $("newCrop").disabled=locked||!master;
  $("goEdit").disabled=!masterImg;$("goEdit").textContent=master?"打开当前母图，开始框选 →":"预览本地母图 →";
- $("resetView").disabled=!masterImg;
+ $("resetView").disabled=!masterImg;$("verifyStoredMaster").disabled=locked||!master||!user;
  for(const b of $("projectParts").querySelectorAll("button"))b.disabled=locked;
  for(const id of ["cropTitle","category","subCategory","target","x","y","w","h"]){$(id).disabled=locked||viewedCropStatus==="published";}
  $("fullRect").disabled=!masterImg||locked||viewedCropStatus==="published";
@@ -587,7 +589,7 @@ async function loadProjects(selectedId=""){
 }
 async function showProjectParts(){
  const id=$("projectSelect").value,el=$("projectParts"),seq=++projectPartsSeq;
- if(!id){el.textContent="填写作品资料后，从右侧导入母图。";projectMasters=[];updateProjectContext();return;}
+ if(!id){el.textContent="填写作品资料后，从右侧导入母图。";projectMasters=[];updateProjectContext();scheduleCaptureRefresh();return;}
  const {data,error}=await db.from("artwork_masters").select("*").eq("project_id",id).order("part_index",{ascending:true});
  if(seq!==projectPartsSeq||$("projectSelect").value!==id)return;
  if(error)throw error;projectMasters=data||[];
@@ -597,7 +599,7 @@ async function showProjectParts(){
  const title=document.createElement("span");title.textContent=m.part_label||("第"+(m.part_index||"?")+"张");
  const info=document.createElement("small");info.textContent=m.original_width+" × "+m.original_height+" px · "+formatBytes(m.original_bytes);
  b.title=m.original_filename||title.textContent;b.append(title,info);b.onclick=async()=>{try{await selectMaster(m);message("已打开母图和对应裁切草稿。","ok");}catch(e){message(e.message,"err");}};el.append(b);}
- updateProjectContext();
+ updateProjectContext();scheduleCaptureRefresh();
 }
 $("projectSelect").onchange=async()=>{
  const id=$("projectSelect").value;
@@ -631,17 +633,18 @@ $("saveProjectMeta").onclick=async()=>{
  }catch(e){message("项目资料保存失败："+e.message,"err");}
 };
 async function resolveArtworkProject(){
+ await assertCaptureContext();
  const existing=projects.find(p=>p.id===$("projectSelect").value);
- if(existing)return existing.id;
+ if(existing){await bindCaptureProject(existing.id);return existing.id;}
  const payload={created_by:user.id,title:$("workTitle").value.trim(),author:$("author").value.trim()||null,era:$("era").value.trim()||null,source_url:$("sourceUrl").value.trim()||null};
  const {data,error}=await db.from("artwork_projects").insert(payload).select("id").single();
  if(error)throw error;
- await loadProjects(data.id);projectSelectionId=data.id;$("projectDetails").open=false;return data.id;
+ await bindCaptureProject(data.id);await loadProjects(data.id);projectSelectionId=data.id;$("projectDetails").open=false;return data.id;
 }
 async function fetchMasters(selectId){const {data,error}=await db.from("artwork_masters").select("*").order("created_at",{ascending:false}).limit(150);if(error)throw error;const box=$("masterList"),selected=selectId||box.value;box.replaceChildren(new Option("选择之前上传的母图",""));for(const m of data||[])box.add(new Option(m.title+" ("+m.original_width+"×"+m.original_height+")",m.id));if(selected&&data?.some(m=>m.id===selected))box.value=selected;return data||[];}
-$("upload").onclick=async()=>{if(busy||multiRunning||navigationRunning)return;setBusy(true);message("正在准备上传及验证高清母图…");try{await flushCropEdits();if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
+$("upload").onclick=async()=>{if(busy||multiRunning||navigationRunning)return;setBusy(true);message("正在准备上传及验证高清母图…");try{await flushCropEdits();if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");await assertCaptureContext();const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
 const {data:old,error:lookupError}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupError)throw lookupError;
-if(old){if($("projectSelect").value&&old.project_id!==$("projectSelect").value)throw Error("相同母图已属于其他项目，请先核对来源与所属项目");message("发现相同母图，正在回读云端原文件校验 SHA-256…");await verifyRemoteOriginal(selectedFile,old.storage_path,hash);await fetchMasters(old.id);await selectMaster(old,true);message("无损校验通过：本地与云端 SHA-256 完全一致，已复用母图。","ok");return;}
+if(old){if($("projectSelect").value&&old.project_id!==$("projectSelect").value)throw Error("相同母图已属于其他项目，请先核对来源与所属项目");message("发现相同母图，正在回读云端原文件校验 SHA-256…");await assertCaptureMaster(old);await verifyRemoteOriginal(selectedFile,old.storage_path,hash);await markMasterVerified(old,hash);await fetchMasters(old.id);await selectMaster(old,true);message("无损校验通过：本地与云端 SHA-256 完全一致，已复用母图。","ok");return;}
 const ext=selectedFile.type==="image/png"?"png":selectedFile.type==="image/webp"?"webp":"jpg";
 const path="masters/"+user.id+"/"+hash+"."+ext;
 $("uploadProgress").hidden=false;$("uploadProgress").style.display="block";$("uploadProgress").value=0;
@@ -653,7 +656,7 @@ const size=Number(matched.metadata?.size??matched.metadata?.contentLength??0);
 if(size&&size!==selectedFile.size)throw Error("云端对象大小与原始文件不一致，禁止入库");
 message("文件已上传，正在回读云端整张原图并核对 SHA-256…");
 await verifyRemoteOriginal(selectedFile,path,hash);
-const project_id=await resolveArtworkProject();const part_index=Math.max(0,...projectMasters.map(m=>Number(m.part_index)||0))+1;const payload={project_id,part_index,part_label:$("partLabel").value.trim()||null,title,author:$("author").value.trim()||null,era:$("era").value.trim()||null,source_url:$("sourceUrl").value.trim()||null,original_filename:selectedFile.name,mime_type:selectedFile.type,original_width:sourceWidth,original_height:sourceHeight,original_bytes:selectedFile.size,sha256:hash,storage_path:path,created_by:user.id};
+const project_id=await resolveArtworkProject();const part_index=Math.max(0,...projectMasters.map(m=>Number(m.part_index)||0))+1;const payload={project_id,part_index,part_label:$("partLabel").value.trim()||null,title,author:$("author").value.trim()||null,era:$("era").value.trim()||null,source_url:$("sourceUrl").value.trim()||null,original_filename:selectedFile.name,mime_type:selectedFile.type,original_width:sourceWidth,original_height:sourceHeight,original_bytes:selectedFile.size,sha256:hash,storage_path:path,verified_sha256:hash,verified_at:new Date().toISOString(),created_by:user.id};
 const {data:saved,error:saveError}=await db.from("artwork_masters").insert(payload).select("*").single();if(saveError)throw saveError;
 await fetchMasters(saved.id);await selectMaster(saved,true);await loadProjects(saved.project_id);$("partLabel").value="";
 message("无损校验通过：上传前后 SHA-256 完全一致；"+saved.original_width+" × "+saved.original_height+" 原生像素，原始字节未改变。可以开始裁切。","ok");
@@ -707,12 +710,12 @@ async function multiDimensions(file){
  }finally{URL.revokeObjectURL(url);}
 }
 async function uploadMultiItem(it,project,index){
- const file=it.file;it.status="校验中";drawMultiQueue();
+ await assertCaptureContext();const file=it.file;it.status="校验中";drawMultiQueue();
  const hash=await sha256(file);
  const {data:old,error:lookupErr}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupErr)throw lookupErr;
  if(old){
   if(old.project_id!==project.id)throw Error("相同原图已属于其他项目，请人工确认");
-  await verifyRemoteOriginal(file,old.storage_path,hash);return old;
+  await assertCaptureMaster(old);await verifyRemoteOriginal(file,old.storage_path,hash);await markMasterVerified(old,hash);return old;
  }
  const [w,height]=it.width?[it.width,it.height]:await multiDimensions(file);
  const ext=/\.png$/i.test(file.name)?"png":/\.webp$/i.test(file.name)?"webp":"jpg";
@@ -725,8 +728,8 @@ async function uploadMultiItem(it,project,index){
  const size=Number(match.metadata?.size??match.metadata?.contentLength??0);if(size&&size!==file.size)throw Error("云端字节数不符");
  it.status="云端回读校验中";drawMultiQueue();await verifyRemoteOriginal(file,path,hash);
  const {data:again,error:againErr}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(againErr)throw againErr;
- if(again){if(again.project_id!==project.id)throw Error("原图已关联其他项目");return again;}
- const payload={created_by:user.id,project_id:project.id,part_index:index,part_label:it.label||null,title:project.title,author:project.author||null,era:project.era||null,source_url:project.source_url||null,original_filename:file.name,mime_type:mime,original_width:w,original_height:height,original_bytes:file.size,sha256:hash,storage_path:path};
+ if(again){if(again.project_id!==project.id)throw Error("原图已关联其他项目");await markMasterVerified(again,hash);return again;}
+ const payload={created_by:user.id,project_id:project.id,part_index:index,part_label:it.label||null,title:project.title,author:project.author||null,era:project.era||null,source_url:project.source_url||null,original_filename:file.name,mime_type:mime,original_width:w,original_height:height,original_bytes:file.size,sha256:hash,storage_path:path,verified_sha256:hash,verified_at:new Date().toISOString()};
  const {data:saved,error:saveErr}=await db.from("artwork_masters").insert(payload).select("*").single();if(saveErr)throw saveErr;return saved;
 }
 $("batchGo").onclick=async()=>{
@@ -871,11 +874,12 @@ $("saveCrop").onclick=async()=>{if(busy||multiRunning||navigationRunning||viewed
 if(selectedCrop){const {data:updated,error}=await db.from("artwork_crops").update(payload).eq("id",selectedCrop).eq("master_id",master.id).eq("status","draft").select("id");if(error||!updated?.length)throw Error(error?.message||"草稿未能保存");}else{const {data,error}=await db.from("artwork_crops").insert(payload).select("id").single();if(error)throw error;selectedCrop=data.id;}
 pendingCropSave=Promise.resolve();cropSaveFailed=false;viewedCropStatus="draft";draftFilter="draft";$("autoSaveState").textContent="草稿已保存；后续框选与资料修改会自动保存到这一条。";await loadDrafts();message("裁切草稿已保存。尚未修改正式图库，审核后才发布。","ok");
 }catch(e){message(e.message,"err");}finally{setBusy(false);}};
-async function refreshAuth(){const {data:{session}}=await db.auth.getSession();user=session?.user||null;$("loginPanel").hidden=Boolean(user);$("workPanel").hidden=!user;$("logout").hidden=!user;$("authState").textContent=user?"已登录："+user.email:"未登录";if(user){await loadCategories();await loadProjects();await fetchMasters();projectSelectionId=$("projectSelect").value;message("先选择古画项目，再导入母图或打开已有母图继续框选。","ok");}else{message("请先登录已有的「美术绘制参考」账号。");}drawMultiQueue();}
+async function refreshAuth(){const {data:{session}}=await db.auth.getSession();user=session?.user||null;$("loginPanel").hidden=Boolean(user);$("workPanel").hidden=!user;$("logout").hidden=!user;$("authState").textContent=user?"已登录："+user.email:"未登录";if(user){await loadCategories();await loadProjects();await fetchMasters();await initCaptureTask();startCaptureSync();projectSelectionId=$("projectSelect").value;message("先选择古画项目，再导入母图或打开已有母图继续框选。","ok");}else{message("请先登录已有的「美术绘制参考」账号。");}drawMultiQueue();}
 $("login").onclick=async()=>{const {error}=await db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});if(error){message("登录失败："+error.message,"err");return;}await refreshAuth();};
 $("logout").onclick=async()=>{await db.auth.signOut();location.reload();};
 window.addEventListener("resize",()=>{if(masterImg)applyZoom();});
-(async()=>{try{await refreshAuth();}catch(e){message("初始化失败："+e.message,"err");}})();
+
 </script>
+<script src="capture-workspace.js?v=0.5.0"></script>
 </body></html>
 
