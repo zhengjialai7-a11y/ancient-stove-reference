@@ -18,6 +18,11 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 #categories{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .side-title{font-size:12px;color:var(--muted);padding:4px 8px 10px}.cat{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;padding:10px;border-radius:9px;text-align:left}.cat:hover,.cat.active{background:#fff}.count{font-size:12px;color:var(--muted)}
 .cat-row{display:flex;align-items:center}.cat-row .cat{flex:1;min-width:0;gap:8px}.cat-row .cat>span:first-child{overflow-wrap:anywhere}
+.subcat-list{margin:0 0 6px 12px;padding-left:10px;border-left:2px solid #d5cbbc}
+.cat.subcat{font-size:13px;padding:8px 9px;color:#514c45}
+.cat.subcat.active{background:#fff;border-left:3px solid var(--accent);padding-left:6px;font-weight:650}
+.cat-expander{border:0;background:transparent;color:#655e54;cursor:pointer;padding:9px 7px;font-size:14px;min-width:25px}
+.cat-expander:focus-visible,.cat:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .main{min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-bottom:40px}.notice{background:#eef7ee;border:1px solid #bdd8bd;padding:10px 12px;border-radius:10px;font-size:12px;line-height:1.6;margin-bottom:14px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.section-head h2{font-size:20px;margin:0}.stats,.status{font-size:12px;color:var(--muted)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:.18s;box-shadow:0 2px 10px rgba(0,0,0,.025)}.card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.08)}
 .thumb{height:210px;overflow:hidden;background:#ddd;position:relative}.thumb img,.thumb canvas{width:100%;height:100%;object-fit:cover;display:block}.badge{position:absolute;top:10px;left:10px;background:rgba(30,27,22,.78);color:#fff;padding:4px 8px;border-radius:999px;font-size:12px}
@@ -228,14 +233,48 @@ function fillFilters(){
  $("#fCategory").innerHTML="";categories.forEach(c=>$("#fCategory").add(new Option(c.name,c.id)));
  if(categories.some(c=>c.id===selectedCategory))$("#fCategory").value=selectedCategory;
 }
+const architectureSubtypes=["围栏／栏杆","围墙","门窗","宝顶／屋脊装饰","屋顶／屋檐","斗拱／梁架","柱础／台基","台阶／廊桥","亭榭／楼阁","桥梁","建筑装饰／构件","建筑组合／庭院"];
+let expandedCategories=new Set(["建筑"]);
 function renderCategories(){
- const box=$("#categories"),scrollTop=box.scrollTop;box.innerHTML="";
+ const box=$("#categories"),scrollTop=box.scrollTop;box.replaceChildren();
+ const chosenSub=$("#subCategoryFilter").value;
+ const chooseCategory=(name,sub)=>{
+   activeCategory=name;
+   $("#subCategoryFilter").value=sub||"";
+   if(name==="建筑")expandedCategories.add("建筑");
+   sanitizeSearch();closeDetailPage(true);renderCategories();render();$(".main").scrollTo({top:0});
+ };
  ["全部参考",...categories.map(c=>c.name)].forEach(name=>{
    const n=name==="全部参考"?refs.length:refs.filter(x=>x.category===name).length;
-   const b=document.createElement("button");b.className="cat"+(name===activeCategory?" active":"");
-   b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';b.onclick=()=>{activeCategory=name;sanitizeSearch();closeDetailPage(true);renderCategories();render();$(".main").scrollTo({top:0})};
-   const row=document.createElement("div");row.className="cat-row";row.appendChild(b);
-   box.appendChild(row);
+   const b=document.createElement("button");b.className="cat"+(name===activeCategory&&!(name==="建筑"&&chosenSub)?" active":"");
+   b.innerHTML='<span>'+esc(name)+'</span><span class="count">'+n+'</span>';
+   b.onclick=()=>chooseCategory(name,null);
+   const row=document.createElement("div");row.className="cat-row";row.append(b);
+   if(name==="建筑"){
+     const expand=document.createElement("button");
+     expand.className="cat-expander";
+     expand.setAttribute("aria-label",expandedCategories.has(name)?"收起建筑细分类":"展开建筑细分类");
+     expand.setAttribute("aria-expanded",expandedCategories.has(name)?"true":"false");
+     expand.textContent=expandedCategories.has(name)?"▾":"▸";
+     expand.onclick=()=>{expandedCategories.has(name)?expandedCategories.delete(name):expandedCategories.add(name);renderCategories();};
+     row.prepend(expand);
+   }
+   box.append(row);
+   if(name==="建筑"&&expandedCategories.has(name)){
+     const list=document.createElement("div");list.className="subcat-list";
+     const known=new Set(architectureSubtypes);
+     const existing=[...new Set(refs.filter(x=>x.category==="建筑").map(x=>x.sub_category).filter(Boolean))];
+     const labels=[...architectureSubtypes,...existing.filter(x=>!known.has(x)).sort()];
+     labels.forEach(sub=>{
+       const count=refs.filter(x=>x.category==="建筑"&&x.sub_category===sub).length;
+       const item=document.createElement("button");
+       item.className="cat subcat"+(activeCategory==="建筑"&&chosenSub===sub?" active":"");
+       item.innerHTML='<span>'+esc(sub)+'</span><span class="count">'+count+'</span>';
+       item.onclick=()=>chooseCategory("建筑",sub);
+       list.append(item);
+     });
+     box.append(list);
+   }
  });
  box.scrollTop=scrollTop;
 }
@@ -245,7 +284,7 @@ function sanitizeSearch(){
  if(v && (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) || (user?.email && v.toLowerCase()===user.email.toLowerCase()))) el.value="";
 }
 function clearFilters(){
- $("#q").value=""; $("#era").value=""; $("#type").value=""; $("#subCategoryFilter").value=""; $("#sourceSite").value=""; render();
+ $("#q").value=""; $("#era").value=""; $("#type").value=""; $("#subCategoryFilter").value=""; $("#sourceSite").value=""; renderCategories();render();
 }
 function getBrowseRows(){
  sanitizeSearch();
@@ -698,7 +737,7 @@ $("#renameCategoryBtn").onclick=()=>{const category=categories.find(c=>c.name===
 $("#renameCategorySelect").onchange=()=>{const category=categories.find(c=>c.id===$("#renameCategorySelect").value);if(category)openCategoryModal(category)};
 $("#addItemBtn").onclick=()=>{editingId=null;clearForm();$("#itemModalTitle").textContent="新增参考";if(categories[0])$("#fCategory").value=categories[0].id;openModal("itemModal")};
 $("#saveCategory").onclick=saveCategory;$("#saveItem").onclick=saveItem;
-["q","era","type","subCategoryFilter","sourceSite"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",render));
+["q","era","type","subCategoryFilter","sourceSite"].forEach(id=>$("#"+id).addEventListener(id==="q"?"input":"change",()=>{if(id==="subCategoryFilter")renderCategories();render();}));
 $("#clearFiltersBtn").onclick=clearFilters;
 $("#q").addEventListener("focus",sanitizeSearch);
 setTimeout(()=>{sanitizeSearch();render()},300);
