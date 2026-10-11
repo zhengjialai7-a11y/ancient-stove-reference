@@ -230,7 +230,24 @@ function applyZoom(){if(!masterImg||!sourceWidth||!sourceHeight)return;
  drawSelection();
 }
 async function setImageUrl(url){const im=$("masterImage");im.crossOrigin="anonymous";await new Promise((resolve,reject)=>{im.onload=resolve;im.onerror=()=>reject(new Error("图片加载失败；请检查存储链接与访问权限"));im.src=url;});masterImg=im;sourceWidth=im.naturalWidth;sourceHeight=im.naturalHeight;$("blank").hidden=true;$("stageViewport").hidden=false;$("zoom").value="1";applyZoom();$("fullRect").disabled=false;$("downloadCrop").disabled=false;}
-async function loadFile(file){$("fileCheck").textContent="正在读取原始文件…";if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");selectedFile=file;fileObjectURL=URL.createObjectURL(file);await setImageUrl(fileObjectURL);master=null;selectedCrop=null;setRectangle(null);$("currentMaster").textContent="已读取本地图片，尚未上传";$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);if(/货郎图/.test(file.name)&&sourceWidth===5500&&sourceHeight===6500){if(!$("workTitle").value)$("workTitle").value="货郎图";if(!$("sourceUrl").value)$("sourceUrl").value="https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362";if(!$("author").value)$("author").value="李公麟";if(!$("era").value)$("era").value="北宋";}$("upload").disabled=!user;drafts=[];renderDrafts();
+function inferSingleFileMetadata(file){
+ const name=String(file?.name||"");
+ const parsed=name.match(/^([^_]{1,12})_([^_]{1,30})_(.+?)(?:_(?:\d+)(?: \(\d+\))?)?\.(?:jpe?g|png|webp)$/i);
+ if(!parsed)return;
+ const selectedProject=projects.find(p=>p.id===$("projectSelect").value);
+ if(selectedProject){
+  $("workTitle").value=selectedProject.title||parsed[3];
+  $("author").value=selectedProject.author||parsed[2];
+  $("era").value=selectedProject.era||parsed[1];
+  $("sourceUrl").value=selectedProject.source_url||$("sourceUrl").value;
+ }else{
+  $("workTitle").value=parsed[3];
+  $("author").value=parsed[2];
+  $("era").value=parsed[1];
+ }
+ updateSourceShortcut();
+}
+async function loadFile(file){$("fileCheck").textContent="正在读取原始文件…";if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");selectedFile=file;fileObjectURL=URL.createObjectURL(file);inferSingleFileMetadata(file);await setImageUrl(fileObjectURL);master=null;selectedCrop=null;setRectangle(null);$("currentMaster").textContent="已读取本地图片，尚未上传";$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);if(/货郎图/.test(file.name)&&sourceWidth===5500&&sourceHeight===6500){if(!$("workTitle").value)$("workTitle").value="货郎图";if(!$("sourceUrl").value)$("sourceUrl").value="https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362";if(!$("author").value)$("author").value="李公麟";if(!$("era").value)$("era").value="北宋";}$("upload").disabled=!user;drafts=[];renderDrafts();
 $("fileCheck").textContent="正在计算原文件 SHA-256…";
 try {const digest=await sha256(file);$("fileCheck").textContent="已核验本地原图 · SHA-256 "+digest+" · 原始文件将直接上传，不经 Canvas 重新编码";}catch(e){$("fileCheck").textContent="SHA-256 尚未完成："+e.message;}
 message("原图已在浏览器读取。下一步填写作品信息并上传，不会调整原图片尺寸。","ok");}
@@ -363,10 +380,6 @@ $("useRecent").onclick=async()=>{
   const file=recentImageFiles[Number($("recentDownloads").value)||0]?.file;
   if(!file)throw Error("请选择图片");
   await chooseIncomingFile(file);
-  const m=file.name.match(/^([^_]{1,12})_([^_]{1,30})_(.+?)(?:_\d+(?: \(\d+\))?)?\.(?:jpe?g|png|webp)$/i);
-  if(m&&!$("workTitle").value.trim()){
-    $("era").value=m[1];$("author").value=m[2];$("workTitle").value=m[3];
-  }
   folderStatus("已在工作台读取「"+file.name+"」。请检查原始像素尺寸与作品信息，再点击上传高清母图。");
  }catch(e){folderStatus("读取失败："+e.message);}
 };
