@@ -11,7 +11,7 @@ async function loadAll(){
  const snapshot=await Promise.all([readTable('artwork_projects','id,title,author,era,source_url'),readTable('artwork_masters','id,project_id,original_filename,original_width,original_height,original_bytes,sha256,verified_sha256,verified_at'),readTable('artwork_crops','id,master_id,status'),readImports()]);
  if(epoch!==authEpoch)return;queue=all;[projectData,masterData,cropData,imports]=snapshot;workspace=C.workspaceRows(queue,projectData,masterData,cropData);
  if(!newSelection)newIds=new Set(imports[0]?.new_task_ids||[]);
- render();renderImports();$('cloudState').textContent='已自动加载云端 '+queue.length+' 条收藏；下次登录无需重新提交 JSON。';$('syncState').textContent='已同步 '+new Date().toLocaleTimeString('zh-CN');return true;
+ render();renderImports();$('cloudState').textContent='已自动加载云端 '+queue.length+' 条收藏；下次登录无需重新提交 JSON。';$('syncState').textContent='已同步 '+new Date().toLocaleTimeString('zh-CN');window.dispatchEvent?.(new Event('art-capture-queue-updated'));return true;
  }catch(e){if(epoch===authEpoch)$('syncState').textContent='同步失败，当前数据可能过期：'+e.message;}
  finally{loading=false;if(rerun){rerun=false;scheduleRefresh();}}
 }
