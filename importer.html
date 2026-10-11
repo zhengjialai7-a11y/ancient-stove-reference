@@ -93,6 +93,7 @@ code{font-size:12px;word-break:break-all}
 <div class="muted" id="fileCheck" aria-live="polite"></div>
 <label for="projectSelect">所属古画项目</label><select id="projectSelect"><option value="">＋新建古画项目</option></select>
 <div id="projectParts" class="muted" style="margin:7px 0">新项目尚无母图</div>
+<button type="button" id="saveProjectMeta" class="secondary small">保存作品信息到当前古画项目（所有母图共用）</button>
 <div class="flex"><div style="flex:1"><label for="partLabel">母图分段名称（可选）</label><input id="partLabel" placeholder="如：上卷、第2段"></div></div>
 <label for="workTitle">原作名称 *</label><input id="workTitle" placeholder="如：货郎图">
 <label for="author">作者</label><input id="author" placeholder="如：李公麟（传）">
@@ -468,6 +469,18 @@ $("projectSelect").onchange=async()=>{
  updateSourceShortcut();
 }
  await showProjectParts();
+};
+$("saveProjectMeta").onclick=async()=>{
+ try{
+ if(!user)throw Error("请先登录");
+ const id=$("projectSelect").value;if(!id)throw Error("请先选择已有古画项目");
+ const title=$("workTitle").value.trim();if(!title)throw Error("作品名称不能为空");
+ const payload={title,author:$("author").value.trim()||null,era:$("era").value.trim()||null,source_url:$("sourceUrl").value.trim()||null};
+ const {error}=await db.from("artwork_projects").update(payload).eq("id",id);
+ if(error)throw error;
+ await loadProjects(id);
+ message("作品信息已保存到古画项目；项目内所有母图切换时均优先读取此信息。","ok");
+ }catch(e){message("项目资料保存失败："+e.message,"err");}
 };
 async function resolveArtworkProject(){
  const existing=projects.find(p=>p.id===$("projectSelect").value);
