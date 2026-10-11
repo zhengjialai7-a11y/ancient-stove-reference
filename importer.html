@@ -125,7 +125,7 @@ code{font-size:12px;word-break:break-all}
 <section>
 <h2>③ 分类审核与裁切草稿</h2>
 <label for="cropTitle">参考标题</label><input id="cropTitle" placeholder="如：《货郎图》·多层框格货担">
-<div class="flex"><div style="flex:1 1 240px"><label for="category">参考大类</label><select id="category"></select></div><div style="flex:1 1 240px"><label for="subCategory">细分类型</label><input id="subCategory" placeholder="多层框格货担"></div></div>
+<div class="flex"><div style="flex:1 1 240px"><label for="category">参考大类</label><select id="category"></select></div><div style="flex:1 1 240px"><label for="subCategory">细分类型</label><input id="subCategory" list="subCategoryOptions" placeholder="选择建议分类或自行填写" autocomplete="off"><datalist id="subCategoryOptions"></datalist><small id="subtypeHint" class="muted">建筑类可选择围栏、门窗、宝顶等标准细类，也可输入自定义细分。</small></div></div>
 <label for="target">发布目标</label><select id="target"><option value="">新建一条参考（不覆盖原记录）</option></select>
 <p class="muted">选择已有记录时，发布将保留其 ID、标题、原有分类和说明，只替换图片及裁切坐标，并备份旧数据。</p>
 <div class="flex"><button id="saveCrop" disabled>保存裁切草稿</button><button class="secondary" id="newCrop">开始新裁切</button></div>
@@ -271,7 +271,20 @@ if(sourceWidth!==m.original_width||sourceHeight!==m.original_height)throw Error(
 $("workTitle").value=m.title;$("author").value=m.author||"";$("era").value=m.era||"";$("sourceUrl").value=m.source_url||"";
 showSize();updateSourceShortcut();await loadCandidates();await loadDrafts();$("applyPreset").hidden=m.sha256!=="9894f41227243f9c949058b93947527e6c1ceed11217fbc234d137adad7d5af7";$("saveCrop").disabled=false;applyZoom();}
 $("masterList").onchange=async()=>{try{const id=$("masterList").value;if(!id)return;const {data,error}=await db.from("artwork_masters").select("*").eq("id",id).single();if(error)throw error;await selectMaster(data);message("已恢复高清母图和全部裁切草稿。","ok");}catch(e){message(e.message,"err");}};
-async function loadCategories(){const {data,error}=await db.from("categories").select("id,name").order("sort_order");if(error)throw error;cats=data||[];const box=$("category");box.replaceChildren();cats.forEach(x=>box.add(new Option(x.name,x.id)));}
+let subtypes=[];
+function updateSubtypeOptions(){
+ const catId=$("category").value,box=$("subCategoryOptions");box.replaceChildren();
+ for(const s of subtypes.filter(s=>s.category_id===catId))box.append(new Option(s.name,s.name));
+ const catName=cats.find(c=>c.id===catId)?.name;
+ $("subtypeHint").textContent=catName==="建筑"?"建筑标准细分类：围栏／栏杆、围墙、门窗、宝顶／屋脊装饰、屋檐、斗拱、台基、廊桥、亭榭等；可以自由补充。":"可选择已有标准细类或自行填写。";
+}
+async function loadCategories(){
+ const {data,error}=await db.from("categories").select("id,name").order("sort_order");if(error)throw error;cats=data||[];
+ const box=$("category");box.replaceChildren();cats.forEach(x=>box.add(new Option(x.name,x.id)));
+ const {data:subData,error:subError}=await db.from("category_subtypes").select("category_id,name,sort_order").order("sort_order");
+ if(subError){subtypes=[];message("细分类建议未能载入："+subError.message,"err");}else subtypes=subData||[];
+ updateSubtypeOptions();
+}
 async function loadCandidates(){const {data,error}=await db.from("references").select("id,title,work_title,source_url").eq("work_title",master.title).limit(200);if(error)throw error;const sourceId=(master.source_url||"").match(/[a-f0-9]{24}/i)?.[0]||null;originalRefs=(data||[]).filter(r=>r.work_title===master.title&&(r.source_url===master.source_url||(sourceId&&r.source_url?.includes(sourceId))||(!master.source_url&&!r.source_url)));const el=$("target");el.replaceChildren(new Option("新建一条参考（不覆盖旧图）",""));originalRefs.forEach(r=>el.add(new Option(r.title,r.id)));}
 async function loadDrafts(){const {data,error}=await db.from("artwork_crops").select("*").eq("master_id",master.id).order("created_at");if(error)throw error;drafts=data||[];renderDrafts();}
 async function loadCropHistory(cropId){
@@ -288,7 +301,7 @@ async function loadCropHistory(cropId){
  if(base&&latest&&changes.length){const area1=base.w*base.h,area2=latest.w*latest.h;const delta=Math.round((area2/area1-1)*100);summary+=" · 相对初始面积："+(delta>=0?"+":"")+delta+"%";}
  box.textContent=summary;
 }
-function openCrop(c){if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}if(selectedCrop!==c.id&&cropSaveFailed){alert("上一处裁切保存失败，请先重试保存再切换");return;}selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";$("autoSaveState").textContent=c.status==="draft"?"已选择「"+c.title+"」，重新框选后自动保存到此记录。":"此参考已经发布；不能通过草稿自动修改。";renderDrafts();if(c.status==="draft")loadCropHistory(c.id);else $("editHistory").textContent="这条参考已经发布；点击其他待审核草稿查看编辑记录。";}
+function openCrop(c){if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}if(selectedCrop!==c.id&&cropSaveFailed){alert("上一处裁切保存失败，请先重试保存再切换");return;}selectedCrop=c.status==="draft"?c.id:null;setRectangle({x:c.x,y:c.y,w:c.w,h:c.h});$("cropTitle").value=c.title;$("category").value=c.category_id;updateSubtypeOptions();$("subCategory").value=c.sub_category||"";$("target").value=c.target_reference_id||"";if(!$("target").value)$("target").value="";$("autoSaveState").textContent=c.status==="draft"?"已选择「"+c.title+"」，重新框选后自动保存到此记录。":"此参考已经发布；不能通过草稿自动修改。";renderDrafts();if(c.status==="draft")loadCropHistory(c.id);else $("editHistory").textContent="这条参考已经发布；点击其他待审核草稿查看编辑记录。";}
 function renderDrafts(){const list=$("cropItems");list.replaceChildren();if(!drafts.length){const p=document.createElement("p");p.className="muted";p.textContent="尚无局部。先框选范围并保存草稿。";list.append(p);return;}
 drafts.forEach(c=>{const row=document.createElement("div");row.className="crop-card"+(selectedCrop===c.id?" sel":"");
 const left=document.createElement("div");const name=document.createElement("b");name.textContent=c.title;const meta=document.createElement("small");meta.textContent=c.x+","+c.y+" · "+c.w+"×"+c.h+" px · "+(c.target_reference_id?"替换旧参考":"新增参考");left.append(name,meta);
@@ -316,7 +329,7 @@ $("applyPreset").onclick=async()=>{if(!master||busy)return;const b=$("applyPrese
  await loadDrafts();message("已导入"+rows.length+"条《货郎图》原像素裁切草稿。逐条检查后点「审核发布」。","ok");
  }catch(e){message("裁切清单导入失败："+e.message,"err");}finally{b.disabled=false;}};
 for(const id of ["cropTitle","subCategory"]){$(id).addEventListener("input",scheduleCropMetadataSave);$(id).addEventListener("change",scheduleCropMetadataSave);}
-for(const id of ["category","target"]){$(id).addEventListener("change",scheduleCropMetadataSave);}
+$("category").addEventListener("change",()=>{updateSubtypeOptions();scheduleCropMetadataSave();});$("target").addEventListener("change",scheduleCropMetadataSave);
 $("newCrop").onclick=()=>{if(metaSaveTimer){clearTimeout(metaSaveTimer);metaSaveTimer=null;autoSaveCropMetadata().catch(()=>{});}if(cropSaveFailed)return alert("上一处裁切保存失败，请重新框选或保存");selectedCrop=null;setRectangle(null);$("cropTitle").value="";$("subCategory").value="";$("target").value="";renderDrafts();};
 $("saveCrop").onclick=async()=>{if(busy)return;setBusy(true);try{if(!master)throw Error("请先上传或选择母图");if(!checkRect())throw Error("裁切超出母图边界或尺寸为空");const title=$("cropTitle").value.trim(),category_id=$("category").value;if(!title||!category_id)throw Error("请填写参考标题和分类");const payload={master_id:master.id,title,category_id,sub_category:$("subCategory").value.trim()||null,x:rectangle.x,y:rectangle.y,w:rectangle.w,h:rectangle.h,target_reference_id:$("target").value||null,updated_at:new Date().toISOString()};
 if(selectedCrop){const {error}=await db.from("artwork_crops").update(payload).eq("id",selectedCrop).eq("status","draft");if(error)throw error;}else{const {data,error}=await db.from("artwork_crops").insert(payload).select("id").single();if(error)throw error;selectedCrop=data.id;}
