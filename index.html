@@ -233,7 +233,7 @@ function fillFilters(){
  $("#fCategory").innerHTML="";categories.forEach(c=>$("#fCategory").add(new Option(c.name,c.id)));
  if(categories.some(c=>c.id===selectedCategory))$("#fCategory").value=selectedCategory;
 }
-const architectureSubtypes=["围栏／栏杆","围墙","门窗","宝顶／屋脊装饰","屋顶／屋檐","斗拱／梁架","柱础／台基","台阶／廊桥","亭榭／楼阁","桥梁","建筑装饰／构件","建筑组合／庭院"];
+const architectureSubtypes=["建筑整体","庭院与建筑群","廊道","桥梁","围墙","围栏与栏杆","门窗","屋顶与屋檐","宝顶与屋脊装饰","柱与柱础","梁架与斗拱","台基与台阶","建筑装饰","棚架与营帐","待确认"];
 let expandedCategories=new Set(["建筑"]);
 function renderCategories(){
  const box=$("#categories"),scrollTop=box.scrollTop;box.replaceChildren();
