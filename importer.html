@@ -33,7 +33,7 @@ button.small{font-size:12px;padding:7px 10px}
 #stage{position:relative;touch-action:none;user-select:none}
 #stage img{display:block;width:100%;height:auto;pointer-events:none;max-width:none}
 #selection{position:absolute;border:2px solid #f5d85e;background:#f5d85e33;box-shadow:0 0 0 1px #222;pointer-events:none;display:none}
-#blank{height:260px;background:#292824;color:#ddd;display:flex;align-items:center;justify-content:center;border-radius:12px}
+#blank{height:260px;background:#292824;color:#ddd;display:flex;align-items:center;justify-content:center;border-radius:12px}#blank[hidden],#stageViewport[hidden]{display:none!important}
 #cropItems{display:grid;gap:9px}
 .crop-card{border:1px solid var(--line);padding:12px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:white}
 .crop-card.sel{outline:2px solid #b89364}
@@ -104,9 +104,9 @@ code{font-size:12px;word-break:break-all}
 <section>
 <div class="flex" style="justify-content:space-between">
 <h2 style="margin:0">② 在母图上框选局部</h2>
-<label style="margin:0;display:flex;align-items:center;gap:9px">显示放大 <input type="range" id="zoom" min="1" max="8" step=".25" value="1" style="width:130px"><span id="zoomLabel">适合屏幕</span></label>
+<span id="zoomLabel" style="font-size:12px;color:#777268">适合屏幕</span><input type="range" id="zoom" min="1" max="16" step=".25" value="1" hidden aria-label="显示放大倍率">
 </div>
-<p class="muted">拖动鼠标框选；滚动容器移动画面。坐标按原始像素记录，放大视图不会提升或降低原图分辨率。</p>
+<p class="muted">在画面上拖动鼠标框选；在母图窗口内滚动鼠标滚轮缩放，滚动条可移动画面。按原始像素保存裁切位置，缩放不改变画质。</p>
 <div id="blank">选择或上传高清母图后显示画面</div>
 <div id="stageViewport" hidden><div id="stage"><img id="masterImage" alt="高清母图原始像素预览" crossorigin="anonymous"><div id="selection"></div></div></div>
 <h3>裁切坐标（原始像素，可手动精修）</h3>
@@ -223,6 +223,19 @@ function updateSourceShortcut(){const input=$("sourceUrl").value.trim();$("openS
 $("sourceUrl").addEventListener("input",updateSourceShortcut);
 $("zipChoice").onchange=async()=>{try{await zipSelected();}catch(e){message(e.message,"err");}};
 $("zoom").oninput=applyZoom;
+$("stageViewport").addEventListener("wheel",e=>{
+ if(!masterImg||!sourceWidth)return;
+ e.preventDefault();
+ const viewport=$("stageViewport"),z=$("zoom");
+ const oldZ=Number(z.value),next=Math.min(16,Math.max(1,Math.round((oldZ*(e.deltaY<0?1.2:1/1.2))*4)/4));
+ if(next===oldZ)return;
+ const bounds=viewport.getBoundingClientRect(),x=e.clientX-bounds.left,y=e.clientY-bounds.top;
+ const anchorX=(viewport.scrollLeft+x)/Math.max(1,$("stage").clientWidth);
+ const anchorY=(viewport.scrollTop+y)/Math.max(1,$("stage").clientHeight);
+ z.value=String(next);applyZoom();
+ viewport.scrollLeft=anchorX*$("stage").clientWidth-x;
+ viewport.scrollTop=anchorY*$("stage").clientHeight-y;
+},{passive:false});
 for(const key of ["x","y","w","h"]){$(key).addEventListener("input",()=>{const r=Object.fromEntries(["x","y","w","h"].map(k=>[k,Number($(k).value)]));rectangle=r;drawSelection();});$(key).addEventListener("change",()=>{if(checkRect())autoSaveCropRange().catch(()=>{});});}
 function stageXY(evt){const b=$("stage").getBoundingClientRect();return {x:Math.min(sourceWidth,Math.max(0,Math.round((evt.clientX-b.left)/b.width*sourceWidth))),y:Math.min(sourceHeight,Math.max(0,Math.round((evt.clientY-b.top)/b.height*sourceHeight)))};}
 $("stage").addEventListener("pointerdown",e=>{if(!masterImg||e.button!==0)return;dragStart=stageXY(e);$("stage").setPointerCapture(e.pointerId);setRectangle({x:dragStart.x,y:dragStart.y,w:1,h:1});});
