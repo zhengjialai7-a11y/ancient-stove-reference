@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "美术绘制参考 · 原图采集助手",
-  "version": "0.5.0",
-  "description": "收藏队列与高清母图工作台共用云端数据，自动关联母图、核验与草稿进度",
+  "version": "0.7.0",
+  "description": "本机原图下载、云端上传核验和逐张关联；支持三幅作品试跑",
   "permissions": [
     "downloads",
     "tabs",
     "storage",
     "scripting",
-    "webNavigation"
+    "webNavigation",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://*.ltfc.net/*",
@@ -22,6 +23,17 @@
     "service_worker": "background.js"
   },
   "content_scripts": [
+    {
+      "matches": [
+        "https://g2.ltfc.net/view/*"
+      ],
+      "js": [
+        "download_bridge.js"
+      ],
+      "all_frames": false,
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": [
         "https://*.ltfc.net/resource_favorites*"
@@ -48,8 +60,19 @@
         "https://zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html*"
       ],
       "js": [
-        "sync_bridge.js"
+        "sync_bridge.js",
+        "local_bridge.js"
       ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://g2.ltfc.net/view/*"
+      ],
+      "js": [
+        "download_observer.js"
+      ],
+      "all_frames": false,
       "run_at": "document_start"
     }
   ]

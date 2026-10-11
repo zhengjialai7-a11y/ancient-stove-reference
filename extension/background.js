@@ -1,5 +1,6 @@
 'use strict';
-// v0.2 intentionally does not trigger a download, access website credentials, or read image bytes.
+// v0.7 local automation uses only explicitly started, source-bound download tasks.
+importScripts('automation.js');
 const IMPORTER='https://zhengjialai7-a11y.github.io/ancient-stove-reference/importer.html';
 const SITE=/^https:\/\/(?:[a-z0-9-]+\.)*ltfc\.net(?:\/|$)/i;
 const WINDOW_MS=3*60*1000;
@@ -77,6 +78,7 @@ chrome.webNavigation?.onHistoryStateUpdated?.addListener(details=>{
 });
 chrome.runtime.onMessage.addListener((msg,sender,sendResponse)=>{
  (async()=>{
+  if(['localCaptureCommand','localCaptureProof'].includes(msg?.type)){sendResponse(await CaptureAutomation.handle(msg,sender));return;}
   if(msg?.type==='favoritesBatch'){
    if(!/\/resource_favorites/.test(sender.tab?.url||sender.url||'')){sendResponse({ok:false});return;}
    const albumId=typeof msg.albumId==='string'&&/^[a-f0-9]{24}$/i.test(msg.albumId)?msg.albumId:'';
