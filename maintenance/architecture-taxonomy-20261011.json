@@ -1,0 +1,540 @@
+{
+  "version": 1,
+  "reason": "User approved architecture subtype normalization 2026-10-11. No references deleted; only sub_category changes.",
+  "category_name": "建筑",
+  "previous_subtypes": [
+    {
+      "id": "dcd54b40-48c0-4343-83ac-4058dc8be94e",
+      "name": "围栏／栏杆",
+      "sort_order": 1
+    },
+    {
+      "id": "65d368b5-5037-4b06-a4aa-6a2762035813",
+      "name": "围墙",
+      "sort_order": 2
+    },
+    {
+      "id": "e084e063-825b-4f7d-9a35-4f14c8f33c4f",
+      "name": "门窗",
+      "sort_order": 3
+    },
+    {
+      "id": "e2e69401-e9b2-4b9b-995c-849a158d8cee",
+      "name": "宝顶／屋脊装饰",
+      "sort_order": 4
+    },
+    {
+      "id": "a75ce5e5-4cbd-443f-a7aa-7c85c46a3668",
+      "name": "屋顶／屋檐",
+      "sort_order": 5
+    },
+    {
+      "id": "dba42996-04a8-41eb-8776-9ad55ffbd8e9",
+      "name": "斗拱／梁架",
+      "sort_order": 6
+    },
+    {
+      "id": "62881026-4457-4f7f-84a9-49e5d877991f",
+      "name": "柱础／台基",
+      "sort_order": 7
+    },
+    {
+      "id": "9c1c3dd2-fc0f-4807-a7e3-68e55d20cdf8",
+      "name": "台阶／廊桥",
+      "sort_order": 8
+    },
+    {
+      "id": "39400690-cf41-4b6f-b2de-58a296157f57",
+      "name": "亭榭／楼阁",
+      "sort_order": 9
+    },
+    {
+      "id": "ce871b6e-75f5-4860-a880-eecb4df3f03c",
+      "name": "桥梁",
+      "sort_order": 10
+    },
+    {
+      "id": "6fac6b44-f6a4-4e89-9d03-925ef62506cd",
+      "name": "建筑装饰／构件",
+      "sort_order": 11
+    },
+    {
+      "id": "876c04af-9697-41c7-a2a7-2646676ccd04",
+      "name": "建筑组合／庭院",
+      "sort_order": 12
+    }
+  ],
+  "refs": [
+    {
+      "id": "e2192155-b8ff-4b8d-96dc-bb9e9e4fedc7",
+      "title": "《笳拍图卷》·营帐",
+      "previous_sub_category": "营帐",
+      "new_sub_category": "棚架与营帐",
+      "expected_updated_at": "2026-10-08T11:03:01.410356+00:00"
+    },
+    {
+      "id": "73faf872-194c-43c3-a5e1-a8f1f7d5b832",
+      "title": "《琴书乐志图》·前方水榭栏板",
+      "previous_sub_category": "栏板",
+      "new_sub_category": "围栏与栏杆",
+      "expected_updated_at": "2026-10-08T14:23:31.024444+00:00"
+    },
+    {
+      "id": "2506985e-daa8-4c31-b8a8-c575a81c4565",
+      "title": "《天香书屋图》·书屋斋馆建筑",
+      "previous_sub_category": "书屋斋馆",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-08T09:40:37.638625+00:00"
+    },
+    {
+      "id": "3efa79ac-2691-4b37-9daa-85c8059de503",
+      "title": "《唐五学士图》·庭院长栏杆",
+      "previous_sub_category": "栏杆",
+      "new_sub_category": "围栏与栏杆",
+      "expected_updated_at": "2026-10-08T14:23:31.024444+00:00"
+    },
+    {
+      "id": "1d8d1d20-16d6-415b-864d-0cde80c243e1",
+      "title": "《琴书乐志图》·水榭转角与基座",
+      "previous_sub_category": "台基转角",
+      "new_sub_category": "台基与台阶",
+      "expected_updated_at": "2026-10-08T14:23:31.024444+00:00"
+    },
+    {
+      "id": "7f5d8aea-aa54-4a5d-be46-ed5213a67be6",
+      "title": "《琴书乐志图》·后方木栏杆",
+      "previous_sub_category": "木栏杆",
+      "new_sub_category": "围栏与栏杆",
+      "expected_updated_at": "2026-10-08T14:23:31.024444+00:00"
+    },
+    {
+      "id": "db65c801-8547-4c19-a0fc-8bbd92015f61",
+      "title": "《白描道君像》（上海博物馆）·道君出行的宫观楼阁",
+      "previous_sub_category": "道君出行的宫观楼阁",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-08T16:22:33.343873+00:00"
+    },
+    {
+      "id": "56e52807-8c2b-4a13-9ac2-813b732d7f16",
+      "title": "《耕织图（亲蚕图／蚕织图卷）》（克利夫兰艺术博物馆）·蚕房坡屋顶与柱架",
+      "previous_sub_category": "蚕房坡屋顶与柱架",
+      "new_sub_category": "屋顶与屋檐",
+      "expected_updated_at": "2026-10-08T16:24:41.984239+00:00"
+    },
+    {
+      "id": "e5c49fd2-0bf0-4136-88e5-cfa79faa90c1",
+      "title": "《蜀山行旅图》（不详）·山间屋舍与道路",
+      "previous_sub_category": "山间屋舍与道路",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-08T16:24:41.984239+00:00"
+    },
+    {
+      "id": "2c9ba911-a8fa-4e41-ac68-8134e55a08a9",
+      "title": "《耕织图（亲蚕图／蚕织图卷）》（克利夫兰艺术博物馆）·蚕房茅顶院落",
+      "previous_sub_category": "蚕房茅顶院落",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-08T16:25:55.067983+00:00"
+    },
+    {
+      "id": "ffa815d2-6cfa-46e9-bb4f-e386bb821224",
+      "title": "《八高僧图》（上海博物馆）·酒楼檐角（原画局部）",
+      "previous_sub_category": "酒楼檐角",
+      "new_sub_category": "待确认",
+      "expected_updated_at": "2026-10-08T16:25:59.814858+00:00"
+    },
+    {
+      "id": "6f4fe05c-3105-4d07-acaa-827d3268413c",
+      "title": "《王建宫词图》·庭院台基与廊下空间",
+      "previous_sub_category": "庭院台基与廊下空间",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T06:16:42.524074+00:00"
+    },
+    {
+      "id": "c98060b7-9592-5f70-b7c2-4311bfdc5ce7",
+      "title": "《兰亭修禊图》·临水亭阁与台阶",
+      "previous_sub_category": "临水亭阁与台阶",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "11b99e53-5143-5a43-b1e5-5173dd72ef49",
+      "title": "《白描仕女图》·庭院楼屋与平台",
+      "previous_sub_category": "庭院楼屋与平台",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "0615824f-eee0-56cb-b41f-36fe4a5918c6",
+      "title": "《归去来辞卷》·园林栏杆与转折通道",
+      "previous_sub_category": "园林栏杆与转折通道",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "f9c38ea3-5fcb-564f-9122-4cdf671a13a8",
+      "title": "《归去来辞卷》·开放堂屋与栏杆阶道",
+      "previous_sub_category": "开放堂屋与栏杆阶道",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "7a973883-af7b-5319-89ee-3aba8de7619c",
+      "title": "《黄鹤楼图》·江岸高台楼阁",
+      "previous_sub_category": "江岸高台楼阁",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "f95675f7-dff5-5364-9047-f7838845ddb3",
+      "title": "《大士十八阿罗汉图》·阶桥及框格栏杆",
+      "previous_sub_category": "阶桥及框格栏杆",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "87cc156f-e589-5b61-ac02-631556fb328b",
+      "title": "《十八罗汉图》·山间小桥与通道",
+      "previous_sub_category": "山间小桥与通道",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "c666a156-b39b-596c-9e61-88a7ee2e4be5",
+      "title": "《仙山楼阁图》·山麓楼阁群布局",
+      "previous_sub_category": "山麓楼阁群布局",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "533cc32b-9f71-59b0-8763-ce6e0d9cb5a9",
+      "title": "《摹唐卢鸿草堂十志图》·茅舍屋顶与围地",
+      "previous_sub_category": "茅舍屋顶与围地",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "cbffea5a-98fd-5be2-abf5-e73bea5b8201",
+      "title": "《高会习琴图》·庭园台阶与栏杆围护",
+      "previous_sub_category": "庭园台阶与栏杆围护",
+      "new_sub_category": "台基与台阶",
+      "expected_updated_at": "2026-10-09T14:25:50.091783+00:00"
+    },
+    {
+      "id": "62aee4b5-94d1-5a79-9528-416a5dc1f16c",
+      "title": "《清明上河图》（张择端故宫本）·卷末街市店铺与檐下空间",
+      "previous_sub_category": "卷末街市店铺与檐下空间",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "743cce66-2938-511c-9357-d032bc78d3eb",
+      "title": "《青绿山水图页》·临水桥台与栏杆",
+      "previous_sub_category": "临水桥台与栏杆",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "6a21dd4f-59e1-57af-a1d1-6a6f6a449609",
+      "title": "《清明上河图》（张择端故宫本）·街市亭檐店面与开放前廊",
+      "previous_sub_category": "街市亭檐店面与开放前廊",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "c54d9d19-64d1-5dad-b598-bb4f954e71b8",
+      "title": "《清明上河图》（张择端故宫本）·多层店楼与折转廊台",
+      "previous_sub_category": "多层店楼与折转廊台",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "0b88a510-dc5d-5c6c-954e-505b7726555b",
+      "title": "《清明上河图》（张择端故宫本）·城门楼与台基阶道",
+      "previous_sub_category": "城门楼与台基阶道",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "c41f2ff8-b0ba-583d-8bba-1de705da2924",
+      "title": "《清明上河图》（张择端故宫本）·篱院门屋与前后屋舍",
+      "previous_sub_category": "篱院门屋与前后屋舍",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "60e5ae06-a457-5557-a5de-7d1e4b7d60f3",
+      "title": "《清明上河图》（张择端故宫本）·码头街边店屋与檐下空间",
+      "previous_sub_category": "码头街边店屋与檐下空间",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "fb56a33d-b204-500d-a269-36522784c3a7",
+      "title": "《清明上河图》（张择端故宫本）·街口层叠杆架与门廊",
+      "previous_sub_category": "街口层叠杆架与门廊",
+      "new_sub_category": "待确认",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "4ab266a7-3479-5382-8eda-aeda2edc86df",
+      "title": "《清明上河图》（张择端故宫本）·虹桥拱架与连续桥栏",
+      "previous_sub_category": "虹桥拱架与连续桥栏",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "ada98f1c-31ca-50b5-89d2-caa52947cf00",
+      "title": "《清明上河图》（张择端故宫本）·水岸房舍与临水栏台",
+      "previous_sub_category": "水岸房舍与临水栏台",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "0db0db14-41f5-5ac7-abaf-d3a9614e6727",
+      "title": "《清明上河图》（张择端故宫本）·河岸店棚与屋檐",
+      "previous_sub_category": "河岸店棚与屋檐",
+      "new_sub_category": "棚架与营帐",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "1614b684-15eb-592a-91f0-21030c3c538a",
+      "title": "《清明上河图》（张择端故宫本）·村道瓦舍与篱院",
+      "previous_sub_category": "村道瓦舍与篱院",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "8295d469-5618-58bb-ae65-b14ffe301068",
+      "title": "《清明上河图》（张择端故宫本）·林间茅舍与土围",
+      "previous_sub_category": "林间茅舍与土围",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "d2556881-014d-5a80-8ceb-5cfee2e02eb3",
+      "title": "《清明上河图》（张择端故宫本）·郊野小平桥与桥面承托",
+      "previous_sub_category": "郊野小平桥与桥面承托",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:12:37.646266+00:00"
+    },
+    {
+      "id": "2fa5b7a3-8703-5491-8cf6-a033f5e6b061",
+      "title": "《山庄读书图页》·林间屋舍与檐下空间",
+      "previous_sub_category": "林间屋舍与檐下空间",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "727b52c2-a6f6-51fd-ad43-177b5448215e",
+      "title": "《摔琴谢知音图》·岸边亭檐与人物空间",
+      "previous_sub_category": "岸边亭檐与人物空间",
+      "new_sub_category": "屋顶与屋檐",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "23e79337-a404-55e4-8024-b71c458f4ad8",
+      "title": "《瑶台献寿图》·瑶台栏台与折转阶道",
+      "previous_sub_category": "瑶台栏台与折转阶道",
+      "new_sub_category": "台基与台阶",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "962c1bce-b92e-5897-8266-529b34a91d99",
+      "title": "《丝纶图轴》·堂屋台基与檐下空间",
+      "previous_sub_category": "堂屋台基与檐下空间",
+      "new_sub_category": "屋顶与屋檐",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "0534494b-eec0-567d-8e4e-74abefe5c04f",
+      "title": "《蓬壶仙侣图》·亭屋檐台与栏杆",
+      "previous_sub_category": "亭屋檐台与栏杆",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "556ddf46-4d99-5cb2-a2b1-9db3ec9f4f17",
+      "title": "《蓬壶仙侣图》·溪岸小桥与台阶",
+      "previous_sub_category": "溪岸小桥与台阶",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "bbf70b83-e779-58bf-9efc-5fddc4e73203",
+      "title": "《征聘图》·栏桥与坡岸通路",
+      "previous_sub_category": "栏桥与坡岸通路",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "fe22f104-16fb-5722-aafc-a0f39c590427",
+      "title": "《真迹册》·女子身后栏杆转折",
+      "previous_sub_category": "女子身后栏杆转折",
+      "new_sub_category": "围栏与栏杆",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "e6a0aa09-881e-55b4-a3ab-1515f3bda13f",
+      "title": "《雪山行旅图》·雪景溪桥与拱架",
+      "previous_sub_category": "雪景溪桥与拱架",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "335bf752-9938-5688-980a-0a9a768ef6ec",
+      "title": "《四景山水图》·庭园院落屋舍",
+      "previous_sub_category": "庭园院落屋舍",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "60d5373d-ecae-52b7-8812-e8d4f6447a59",
+      "title": "《瑶池献寿图》·献寿栏台与阶道",
+      "previous_sub_category": "献寿栏台与阶道",
+      "new_sub_category": "台基与台阶",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "2a3b8ade-3571-5c29-9c84-9c3dfc672b2c",
+      "title": "《山馆读书图》·山馆屋舍与平台",
+      "previous_sub_category": "山馆屋舍与平台",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "d2d24a38-949e-57ea-ad14-9b92d73f00b4",
+      "title": "《蚕事图》·蚕事图院落与檐下工作空间",
+      "previous_sub_category": "蚕事图院落与檐下工作空间",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "51d96fa1-640f-5910-ae06-a240671e86a1",
+      "title": "《携客访友图》·访友屋舍与阶台",
+      "previous_sub_category": "访友屋舍与阶台",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "4ce77770-d848-5976-99bf-a845265abfb7",
+      "title": "《秋窗读易图》·秋窗读易图临水屋舍",
+      "previous_sub_category": "秋窗读易图临水屋舍",
+      "new_sub_category": "门窗",
+      "expected_updated_at": "2026-10-09T15:58:59.829351+00:00"
+    },
+    {
+      "id": "68a1ac24-1b74-5e5e-b14c-76ab0d062f21",
+      "title": "《青绿山水图》·山前院屋屋顶围院与入口",
+      "previous_sub_category": "山前院屋屋顶围院与入口",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-10T01:19:12.762304+00:00"
+    },
+    {
+      "id": "8c36350a-5e5d-57cc-87f8-9e17c1500b72",
+      "title": "《青绿山水图》·水岸栏桥与桥柱",
+      "previous_sub_category": "水岸栏桥与桥柱",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-10T01:19:15.045518+00:00"
+    },
+    {
+      "id": "1a5212fd-a6e0-51dd-955a-db99aab0e4bf",
+      "title": "《嫦娥月宫图》·月宫屋檐栏台与庭院",
+      "previous_sub_category": "月宫屋檐栏台与庭院",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-10T01:19:15.045518+00:00"
+    },
+    {
+      "id": "6e4d9301-845d-5874-8e2c-0272d242c012",
+      "title": "《荷亭消夏图》·竹林亭舍完整檐顶栏台与柱脚",
+      "previous_sub_category": "竹林亭舍完整檐顶栏台与柱脚",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-10T01:19:22.480513+00:00"
+    },
+    {
+      "id": "3072b2f6-60e6-55ca-8eec-44deb773bb4c",
+      "title": "《茗园赌市图》·茶市桥栏与坡道",
+      "previous_sub_category": "茶市桥栏与坡道",
+      "new_sub_category": "桥梁",
+      "expected_updated_at": "2026-10-10T01:19:24.998043+00:00"
+    },
+    {
+      "id": "207be947-0c78-5acc-b179-6fba08f55d57",
+      "title": "《宋溪亭客话图》·溪亭客话图完整亭顶檐台与支柱",
+      "previous_sub_category": "溪亭客话图完整亭顶檐台与支柱",
+      "new_sub_category": "建筑整体",
+      "expected_updated_at": "2026-10-10T01:19:27.432406+00:00"
+    },
+    {
+      "id": "89bbc81c-49d1-5aa9-ab51-4e76a2ca60bb",
+      "title": "《养正图》·堂屋檐台与庭院",
+      "previous_sub_category": "堂屋檐台与庭院",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-10T01:19:30.099944+00:00"
+    },
+    {
+      "id": "84b1152d-031a-59d7-89a0-58842b24304e",
+      "title": "《养正图》·水边栏台与台阶",
+      "previous_sub_category": "水边栏台与台阶",
+      "new_sub_category": "台基与台阶",
+      "expected_updated_at": "2026-10-10T01:19:30.099944+00:00"
+    },
+    {
+      "id": "9b0878ed-8064-524b-b39b-b36dfa60f66a",
+      "title": "《养正图》·殿堂门口台阶与檐下空间",
+      "previous_sub_category": "殿堂门口台阶与檐下空间",
+      "new_sub_category": "台基与台阶",
+      "expected_updated_at": "2026-10-10T01:19:32.409615+00:00"
+    },
+    {
+      "id": "c81ba8e1-38b3-53b2-813b-f8da4cbd3b3f",
+      "title": "《养正图》·茅亭檐顶与栏台柱列",
+      "previous_sub_category": "茅亭檐顶与栏台柱列",
+      "new_sub_category": "屋顶与屋檐",
+      "expected_updated_at": "2026-10-10T01:19:32.409615+00:00"
+    },
+    {
+      "id": "081f1159-7aef-57d7-9b7e-337ea9fa8c6d",
+      "title": "《养正图》·堂屋门口与院落空间",
+      "previous_sub_category": "堂屋门口与院落空间",
+      "new_sub_category": "庭院与建筑群",
+      "expected_updated_at": "2026-10-10T01:19:36.062255+00:00"
+    }
+  ],
+  "crops": [
+    {
+      "id": "e4bb420d-7a10-459a-a5a4-326cc136fe25",
+      "title": "《十八学士图》·山水亭榭与建筑栏板",
+      "previous_sub_category": "亭榭与栏板",
+      "new_sub_category": "屋顶与屋檐",
+      "expected_updated_at": "2026-10-11T05:29:36.396806+00:00"
+    },
+    {
+      "id": "2f2a379c-ba8c-43cd-a0e3-91375b9466c7",
+      "title": "《十八学士图》·亭台树石与斜坡行人",
+      "previous_sub_category": "庭院组合",
+      "new_sub_category": "台基与台阶",
+      "expected_updated_at": "2026-10-11T05:29:36.396806+00:00"
+    },
+    {
+      "id": "f7ca2e1d-7242-4174-ad54-e3724af08f80",
+      "title": "《十八学士图》·阁楼与窗棂栏板",
+      "previous_sub_category": "阁楼与栏杆",
+      "new_sub_category": "围栏与栏杆",
+      "expected_updated_at": "2026-10-11T05:36:29.82452+00:00"
+    },
+    {
+      "id": "1b5f7054-047d-4d9a-8e85-f80c1f11a285",
+      "title": "《十八学士图》·阶梯栏杆与廊桥",
+      "previous_sub_category": "台阶与栏杆",
+      "new_sub_category": "待确认",
+      "expected_updated_at": "2026-10-11T05:36:29.82452+00:00"
+    },
+    {
+      "id": "dc88c649-7d58-4722-ab9f-3fc7928d7ba1",
+      "title": "《十八学士图》·曲折围墙与墙檐",
+      "previous_sub_category": "台基",
+      "new_sub_category": "待确认",
+      "expected_updated_at": "2026-10-11T06:19:39.879+00:00"
+    }
+  ]
+}
