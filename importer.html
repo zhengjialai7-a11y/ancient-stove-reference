@@ -6,7 +6,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="capture-common.js?v=0.5.0"></script>
+<script src="capture-common.js?v=0.5.1"></script>
 <style>
 :root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#282620;--sub:#766f64;--line:#ded8cc;--accent:#6f4c2f;--green:#316f57}
 *{box-sizing:border-box}
@@ -356,23 +356,28 @@ function applyZoom(){if(!masterImg||!sourceWidth||!sourceHeight)return;
 }
 async function setImageUrl(url){const im=$("masterImage");im.crossOrigin="anonymous";await new Promise((resolve,reject)=>{im.onload=resolve;im.onerror=()=>reject(new Error("图片加载失败；请检查存储链接与访问权限"));im.src=url;});masterImg=im;sourceWidth=im.naturalWidth;sourceHeight=im.naturalHeight;$("blank").hidden=true;$("stageViewport").hidden=false;$("zoom").value="1";applyZoom();$("fullRect").disabled=false;$("downloadCrop").disabled=false;}
 function inferSingleFileMetadata(file){
- const name=String(file?.name||"");
- const parsed=name.match(/^([^_]{1,12})_([^_]{1,30})_(.+?)(?:_(?:\d+)(?: \(\d+\))?)?\.(?:jpe?g|png|webp)$/i);
+ const parsed=CaptureCommon.filenameMetadata(file?.name);
  if(!parsed)return;
  const selectedProject=projects.find(p=>p.id===$("projectSelect").value);
  if(selectedProject){
-  $("workTitle").value=selectedProject.title||parsed[3];
-  $("author").value=selectedProject.author||parsed[2];
-  $("era").value=selectedProject.era||parsed[1];
-  $("sourceUrl").value=selectedProject.source_url||$("sourceUrl").value;
+  assertFileArtwork(file,selectedProject);
+  $("workTitle").value=selectedProject.title||parsed.title;
+  $("author").value=selectedProject.author||parsed.author;
+  $("era").value=selectedProject.era||parsed.era;
+  $("sourceUrl").value=selectedProject.source_url||"";
  }else{
-  $("workTitle").value=parsed[3];
-  $("author").value=parsed[2];
-  $("era").value=parsed[1];
+  if($("workTitle").value&&CaptureCommon.artworkTitle($("workTitle").value)!==CaptureCommon.artworkTitle(parsed.title))$("sourceUrl").value="";
+  $("workTitle").value=parsed.title;
+  $("author").value=parsed.author;
+  $("era").value=parsed.era;
  }
  updateSourceShortcut();
 }
-async function loadFile(file){if(busy||multiRunning||navigationRunning)throw Error("请等待当前任务完成");await flushCropEdits();if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");clearActiveMaster(false);$("fileCheck").textContent="正在读取原始文件…";if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);selectedFile=file;fileObjectURL=URL.createObjectURL(file);inferSingleFileMetadata(file);await setImageUrl(fileObjectURL);$("currentMaster").textContent="本地预览 · 尚未上传，暂不能保存草稿";$("activeMasterSummary").textContent="本地预览："+file.name;$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);if(/货郎图/.test(file.name)&&sourceWidth===5500&&sourceHeight===6500){if(!$("workTitle").value)$("workTitle").value="货郎图";if(!$("sourceUrl").value)$("sourceUrl").value="https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362";if(!$("author").value)$("author").value="李公麟";if(!$("era").value)$("era").value="北宋";}updateWorkspaceControls();
+function assertFileArtwork(file,project=projects.find(p=>p.id===$("projectSelect").value)){
+ const parsed=CaptureCommon.filenameMetadata(file?.name);
+ if(parsed&&project?.title&&CaptureCommon.artworkTitle(parsed.title)!==CaptureCommon.artworkTitle(project.title))throw Error('文件「'+file.name+'」属于「'+parsed.title+'」，当前项目是「'+project.title+'」。请先切换或新建对应古画项目；若确为同一作品，请核对文件名后再导入。');
+}
+async function loadFile(file){if(busy||multiRunning||navigationRunning)throw Error("请等待当前任务完成");await flushCropEdits();if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");assertFileArtwork(file);clearActiveMaster(false);$("fileCheck").textContent="正在读取原始文件…";if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);selectedFile=file;fileObjectURL=URL.createObjectURL(file);inferSingleFileMetadata(file);await setImageUrl(fileObjectURL);$("currentMaster").textContent="本地预览 · 尚未上传，暂不能保存草稿";$("activeMasterSummary").textContent="本地预览："+file.name;$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);if(/货郎图/.test(file.name)&&sourceWidth===5500&&sourceHeight===6500){if(!$("workTitle").value)$("workTitle").value="货郎图";if(!$("sourceUrl").value)$("sourceUrl").value="https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362";if(!$("author").value)$("author").value="李公麟";if(!$("era").value)$("era").value="北宋";}updateWorkspaceControls();
 $("fileCheck").textContent="正在计算原文件 SHA-256…";
 try {const digest=await sha256(file);$("fileCheck").textContent="已核验本地原图 · SHA-256 "+digest+" · 原始文件将直接上传，不经 Canvas 重新编码";}catch(e){$("fileCheck").textContent="SHA-256 尚未完成："+e.message;}
 message("原图已在浏览器读取。下一步填写作品信息并上传，不会调整原图片尺寸。","ok");}
@@ -642,7 +647,7 @@ async function resolveArtworkProject(){
  await bindCaptureProject(data.id);await loadProjects(data.id);projectSelectionId=data.id;$("projectDetails").open=false;return data.id;
 }
 async function fetchMasters(selectId){const {data,error}=await db.from("artwork_masters").select("*").order("created_at",{ascending:false}).limit(150);if(error)throw error;const box=$("masterList"),selected=selectId||box.value;box.replaceChildren(new Option("选择之前上传的母图",""));for(const m of data||[])box.add(new Option(m.title+" ("+m.original_width+"×"+m.original_height+")",m.id));if(selected&&data?.some(m=>m.id===selected))box.value=selected;return data||[];}
-$("upload").onclick=async()=>{if(busy||multiRunning||navigationRunning)return;setBusy(true);message("正在准备上传及验证高清母图…");try{await flushCropEdits();if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");await assertCaptureContext();const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
+$("upload").onclick=async()=>{if(busy||multiRunning||navigationRunning)return;setBusy(true);message("正在准备上传及验证高清母图…");try{await flushCropEdits();if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");assertFileArtwork(selectedFile);await assertCaptureContext();const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
 const {data:old,error:lookupError}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupError)throw lookupError;
 if(old){if($("projectSelect").value&&old.project_id!==$("projectSelect").value)throw Error("相同母图已属于其他项目，请先核对来源与所属项目");message("发现相同母图，正在回读云端原文件校验 SHA-256…");await assertCaptureMaster(old);await verifyRemoteOriginal(selectedFile,old.storage_path,hash);await markMasterVerified(old,hash);await fetchMasters(old.id);await selectMaster(old,true);message("无损校验通过：本地与云端 SHA-256 完全一致，已复用母图。","ok");return;}
 const ext=selectedFile.type==="image/png"?"png":selectedFile.type==="image/webp"?"webp":"jpg";
@@ -694,6 +699,8 @@ async function prepareMultiQueue(files){
  if(multiRunning||busy||navigationRunning)return;
  const images=files.filter(x=>/\.(jpe?g|png|webp)$/i.test(x.name)).sort((a,b)=>a.name.localeCompare(b.name,"zh-CN",{numeric:true}));
  if(!images.length){message("请选择 JPG、PNG 或 WebP 图片。","err");return;}
+ const project=projects.find(p=>p.id===$("projectSelect").value)||CaptureCommon.filenameMetadata(images[0].name);
+ for(const file of images)assertFileArtwork(file,project);
  multiProjectId=null;multiQueue=images.map((file,i)=>({file,label:"第"+(i+1)+"段",status:"待处理",error:"",width:0,height:0}));
  const queue=multiQueue;
  if(!$("projectSelect").value)inferSingleFileMetadata(images[0]);
@@ -710,7 +717,7 @@ async function multiDimensions(file){
  }finally{URL.revokeObjectURL(url);}
 }
 async function uploadMultiItem(it,project,index){
- await assertCaptureContext();const file=it.file;it.status="校验中";drawMultiQueue();
+ await assertCaptureContext();const file=it.file;assertFileArtwork(file,project);it.status="校验中";drawMultiQueue();
  const hash=await sha256(file);
  const {data:old,error:lookupErr}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupErr)throw lookupErr;
  if(old){
@@ -880,6 +887,6 @@ $("logout").onclick=async()=>{await db.auth.signOut();location.reload();};
 window.addEventListener("resize",()=>{if(masterImg)applyZoom();});
 
 </script>
-<script src="capture-workspace.js?v=0.5.0"></script>
+<script src="capture-workspace.js?v=0.5.1"></script>
 </body></html>
 

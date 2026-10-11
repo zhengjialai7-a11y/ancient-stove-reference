@@ -13,7 +13,8 @@ function setup({corrupt=false,paused=false,existing=false}={}){
   assertCaptureContext:async()=>{events.push('guard');if(paused)throw Error('paused');},assertCaptureMaster:async()=>{},
   markMasterVerified:async()=>events.push('reuse-receipt'),uploadBytes:async()=>events.push('upload'),
   db:{storage:{from:()=>({list:async()=>({data:[{name:await sha256(file)+'.jpg',metadata:{size:file.size}}]}),download:async()=>{events.push('readback');return {data:corrupt?new Blob([new Uint8Array([5,6,7,8])]):file}}})},from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:existing?{id:'old',project_id:'project',storage_path:'existing'}:null})})}),insert:payload=>{events.push('insert');writes.push(payload);return {select:()=>({single:async()=>({data:{id:'new',...payload}})})}}})}});
- vm.runInContext(verify+'\n'+upload,ctx);ctx.item={file,width:100,height:80};ctx.project={id:'project',title:'fixture',source_url:'https://g2.ltfc.net/view/SUHA/608a619faa7c385c8d943087'};
+ vm.runInContext(readFileSync(new URL('../capture-common.js',import.meta.url),'utf8'),ctx);
+ vm.runInContext(html.slice(html.indexOf('function assertFileArtwork('),html.indexOf('async function loadFile('))+'\n'+verify+'\n'+upload,ctx);ctx.item={file,width:100,height:80};ctx.project={id:'project',title:'fixture',source_url:'https://g2.ltfc.net/view/SUHA/608a619faa7c385c8d943087'};
  return {ctx,writes,events,run:()=>vm.runInContext('uploadMultiItem(item,project,1)',ctx)};
 }
 test('batch upload registers native metadata and verification receipt only after matching cloud bytes',async()=>{
@@ -25,4 +26,8 @@ test('failed cloud SHA verification never registers a master or completion recei
 test('paused collection stops before transfer and reusing a master avoids another upload',async()=>{
  const stopped=setup({paused:true});await assert.rejects(stopped.run(),/paused/);assert.deepEqual(stopped.events,['guard']);
  const reuse=setup({existing:true});await reuse.run();assert.deepEqual(reuse.events,['guard','readback','reuse-receipt']);assert.equal(reuse.writes.length,0);
+});
+test('switching projects after choosing files rejects a different artwork before any transfer',async()=>{
+ const s=setup();s.ctx.item.file=new File([new Uint8Array([1,2,3,4])],'明_佚名明人_珍禽货郎图_1.jpg',{type:'image/jpeg'});s.ctx.project.title='罗汉图';
+ await assert.rejects(s.run(),/请先切换或新建/);assert.deepEqual(s.events,['guard']);assert.equal(s.writes.length,0);
 });

@@ -15,6 +15,7 @@ async function initCaptureTask(){
  if(id){const p=projects.find(p=>p.id===id);if(!p)throw Error('关联项目不存在或没有读取权限');await loadProjects(id);fillProjectMetadata(p);projectSelectionId=id;$("projectDetails").open=false;if(projectMasters.length)await selectMaster(projectMasters[0]);}
  // Legacy extension URLs also reuse a unique source project without matching by title.
  if(!incomingCaptureTask&&!id){const source=CaptureCommon.sourceKey(new URLSearchParams(location.search).get('source_url'));const matches=projects.filter(p=>source&&CaptureCommon.sourceKey(p.source_url)===source);if(matches.length===1){await loadProjects(matches[0].id);fillProjectMetadata(matches[0]);projectSelectionId=matches[0].id;}}
+ if(id&&new URLSearchParams(location.search).get('edit_project')==='1'){setWorkspaceMode('import');$("projectDetails").open=true;}
  await refreshCaptureSummary();
 }
 async function assertCaptureContext(){
@@ -46,7 +47,7 @@ async function refreshCaptureSummary(){
  if(!user)return;const project=$("projectSelect").value,task=incomingCaptureTask?.id;
  try{let query=db.from('reference_capture_status').select('*');if(task)query=query.eq('id',task);else if(project)query=query.eq('resolved_project_id',project);else{$('captureSummary').textContent='选择项目后自动显示关联队列状态。';return;}
  const {data,error}=await query;if(error)throw error;if(project!==$("projectSelect").value&&!task)return;
- if(!data?.length){$('captureSummary').textContent='当前项目尚无对应收藏任务。收藏队列导入该来源后会自动关联。';return;}
+ if(!data?.length){const parts=projectMasters.filter(m=>m.project_id===project),verified=parts.filter(m=>m.verified_at&&m.verified_sha256===m.sha256).length;$('captureSummary').textContent='本项目已上传 '+parts.length+' 张母图 / 已核验 '+verified+' 张；来源尚未准确关联收藏任务。收藏队列已显示本项目进度，请核对原作来源链接及收藏清单。';return;}
  if(task)incomingCaptureTask=data[0];$('captureSummary').textContent=data.map(r=>(r.display_title||r.source_id)+' · '+(r.paused?'已暂停 · ':'')+CaptureCommon.labels[r.live_status]+' · 母图 '+r.master_count+' / 已核验 '+r.verified_count+' · 草稿 '+r.draft_count+' · 已发布 '+r.published_count+'。下一步：'+CaptureCommon.nextAction(r)).join('\n');
  }catch(e){$('captureSummary').textContent='队列状态同步失败：'+e.message;}
 }
