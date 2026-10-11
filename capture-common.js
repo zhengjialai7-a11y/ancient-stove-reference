@@ -3,6 +3,7 @@
  const labels={pending:'待处理',needs_review:'关联待确认',downloaded:'已下载待上传',failed:'失败待处理',uploaded_unverified:'已上传 · 待回读核验',uploaded:'母图已核验入库',drafts_ready:'草稿待审核',published:'已有发布参考'};
  function sourceKey(url){const m=String(url||'').match(/^https:\/\/g2\.ltfc\.net\/view\/([A-Z0-9_]+)\/([a-f0-9]{24})(?:[/?#]|$)/i);return m?m[1].toUpperCase()+':'+m[2].toLowerCase():null;}
  function normalize(record,idx){
+  if(!record||typeof record!=='object'||Array.isArray(record))return null;
   const source_id=String(record.source_id||record.sourceId||record.resourceId||record.resource?.id||'').trim().toLowerCase();
   const source_type=String(record.source_type||record.sourceType||record.resource?.type||record.resource?.src||'').trim().toUpperCase();
   if(!/^[a-f0-9]{24}$/.test(source_id)||!/^[A-Z0-9_]{3,20}$/.test(source_type))return null;
@@ -15,7 +16,7 @@
    legacy_status:record.legacy_status||record.status||null};
  }
  function parseJSON(obj){
-  const data=Array.isArray(obj)?obj:obj.items||obj.observedFavorites?.rows||obj.rows;
+  const data=Array.isArray(obj)?obj:obj?.items||obj?.observedFavorites?.rows||obj?.rows;
   if(!Array.isArray(data))throw Error('JSON 中找不到收藏记录数组');
   const unique=new Map();let invalid=0,duplicate=0;
   data.forEach((r,i)=>{const n=normalize(r,i);if(!n){invalid++;return;}const key=n.source_type+':'+n.source_id;if(unique.has(key)){duplicate++;return;}unique.set(key,n);});
