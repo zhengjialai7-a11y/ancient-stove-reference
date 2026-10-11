@@ -276,7 +276,7 @@ function updateSubtypeOptions(){
  const catId=$("category").value,box=$("subCategoryOptions");box.replaceChildren();
  for(const s of subtypes.filter(s=>s.category_id===catId))box.append(new Option(s.name,s.name));
  const catName=cats.find(c=>c.id===catId)?.name;
- $("subtypeHint").textContent=catName==="建筑"?"建筑标准细分类：围栏／栏杆、围墙、门窗、宝顶／屋脊装饰、屋檐、斗拱、台基、廊桥、亭榭等；可以自由补充。":"可选择已有标准细类或自行填写。";
+ $("subtypeHint").textContent=catName==="建筑"?"建筑细分类按主要对象选择：完整建筑选“建筑整体”，院落群组选“庭院与建筑群”，局部选对应构件；无法确认选“待确认”。":"可选择已有标准细类或自行填写。";
 }
 async function loadCategories(){
  const {data,error}=await db.from("categories").select("id,name").order("sort_order");if(error)throw error;cats=data||[];
