@@ -226,7 +226,7 @@ function fillFilters(){
  $("#era").innerHTML='<option value="">全部年代</option>';$("#type").innerHTML='<option value="">全部类型</option>';$("#subCategoryFilter").innerHTML='<option value="">全部细分</option>';$("#sourceSite").innerHTML='<option value="">全部来源</option>';
  [...new Set(refs.map(x=>x.era).filter(Boolean))].sort().forEach(v=>$("#era").add(new Option(v,v)));
  [...new Set(refs.map(x=>x.type).filter(Boolean))].sort().forEach(v=>$("#type").add(new Option(v,v)));
- [...new Set(refs.map(x=>x.sub_category).filter(Boolean))].sort().forEach(v=>$("#subCategoryFilter").add(new Option(v,v)));
+ [...new Set([...architectureSubtypes,...refs.map(x=>x.sub_category).filter(Boolean)])].sort().forEach(v=>$("#subCategoryFilter").add(new Option(v,v)));
  [...new Set(refs.map(x=>x.source_site).filter(Boolean))].sort().forEach(v=>$("#sourceSite").add(new Option(v,v)));
  $("#era").value=ev;$("#type").value=tv;$("#subCategoryFilter").value=subv;$("#sourceSite").value=sv;
  const selectedCategory=$("#fCategory").value;
