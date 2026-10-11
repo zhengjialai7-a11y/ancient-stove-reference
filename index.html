@@ -10,11 +10,11 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 button,input,select,textarea{font:inherit}button{cursor:pointer}
 header{position:sticky;top:0;z-index:20;flex-shrink:0;background:rgba(244,241,234,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
-.wrap{max-width:1600px;margin:auto;padding:16px 22px}.top{display:flex;gap:16px;align-items:end;justify-content:space-between;flex-wrap:wrap}
-h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
-.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.toolbar input,.toolbar select{height:38px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:0 11px}
-.btn{border:0;border-radius:10px;padding:10px 14px;background:var(--accent);color:#fff}.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}.btn.danger{background:var(--danger)}
-.layout{max-width:1600px;width:100%;margin:auto;flex:1;min-height:0;display:grid;grid-template-columns:240px 1fr;grid-template-rows:minmax(0,1fr);gap:18px;padding:20px 22px;overflow:hidden}.sidebar{background:var(--sidebar);border:1px solid var(--line);border-radius:14px;padding:12px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.wrap{max-width:1600px;margin:auto;padding:9px 22px}.top{display:flex;gap:8px 18px;align-items:center;justify-content:flex-start;flex-wrap:wrap}
+h1{font-size:22px;margin:0 0 2px}.sub{font-size:11px;color:var(--muted)}
+.toolbar{display:flex;gap:6px;flex:1;min-width:0;flex-wrap:wrap;align-items:center}.toolbar input,.toolbar select{height:32px;border:1px solid var(--line);background:#fff;border-radius:10px;padding:0 11px}
+.btn{border:0;border-radius:8px;padding:7px 10px;background:var(--accent);color:#fff}.btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}.btn.danger{background:var(--danger)}
+.layout{max-width:1600px;width:100%;margin:auto;flex:1;min-height:0;display:grid;grid-template-columns:240px 1fr;grid-template-rows:minmax(0,1fr);gap:12px;padding:12px 22px;overflow:hidden}.sidebar{background:var(--sidebar);border:1px solid var(--line);border-radius:14px;padding:12px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 #categories{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .side-title{font-size:12px;color:var(--muted);padding:4px 8px 10px}.cat{display:flex;align-items:center;justify-content:space-between;width:100%;border:0;background:transparent;padding:10px;border-radius:9px;text-align:left}.cat:hover,.cat.active{background:#fff}.count{font-size:12px;color:var(--muted)}
 .cat-row{display:flex;align-items:center}.cat-row .cat{flex:1;min-width:0;gap:8px}.cat-row .cat>span:first-child{overflow-wrap:anywhere}
@@ -64,7 +64,7 @@ h1{font-size:27px;margin:0 0 4px}.sub{font-size:13px;color:var(--muted)}
 .image-paste-area:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--chip)}
 .image-upload-preview{margin-top:10px}.image-upload-preview img{max-width:100%;max-height:240px;display:block;border-radius:8px;margin-bottom:8px}
 .thumb,.meta h3{cursor:pointer}
-@media(max-width:900px){.layout{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.sidebar{height:min(24dvh,220px)}.thumb{height:180px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}.detail-shell{grid-template-columns:1fr}.detail-image-wrap{min-height:320px}}
+#userStatus{font-size:11px;line-height:1.2;margin-top:2px}.toolbar select{max-width:180px}.toolbar #subCategoryFilter{max-width:200px}.toolbar #q{width:205px;min-width:155px}@media(max-width:900px){.layout{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}.sidebar{height:min(24dvh,220px)}.thumb{height:180px}.formgrid{grid-template-columns:1fr}.full{grid-column:auto}.detail-shell{grid-template-columns:1fr}.detail-image-wrap{min-height:320px}}
 </style>
 </head>
 <body>
