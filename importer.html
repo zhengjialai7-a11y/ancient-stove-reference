@@ -29,7 +29,7 @@ button.small{font-size:12px;padding:7px 10px}
 .mini-form label{margin-top:0}
 #status{padding:11px 14px;border-radius:9px;border:1px solid #cfbda5;background:#faf4e7;min-height:42px;margin-bottom:20px;font-size:13px;white-space:pre-wrap;line-height:1.6}
 #status.ok{background:#ebf7ef;border-color:#badbc6}#status.err{background:#fff0ec;border-color:#e8bcb3}
-#stageViewport{height:min(70vh,750px);min-height:350px;background:#222;overflow:auto;position:relative;border-radius:12px}
+#stageViewport{height:min(70vh,750px);min-height:350px;background:#222;overflow:auto;position:relative;border-radius:12px;cursor:default}#stageViewport.middle-panning,#stageViewport.middle-panning *{cursor:grabbing!important}
 #stage{position:relative;touch-action:none;user-select:none}
 #stage img{display:block;width:100%;height:auto;pointer-events:none;max-width:none}
 #selection{position:absolute;border:2px solid #f5d85e;background:#f5d85e33;box-shadow:0 0 0 1px #222;pointer-events:none;display:none}
@@ -119,7 +119,7 @@ code{font-size:12px;word-break:break-all}
 <h2 style="margin:0">② 在母图上框选局部</h2>
 <span id="zoomLabel" style="font-size:12px;color:#777268">适合屏幕</span><input type="range" id="zoom" min="1" max="16" step=".25" value="1" hidden aria-label="显示放大倍率">
 </div>
-<p class="muted">在画面上拖动鼠标框选；在母图窗口内滚动鼠标滚轮缩放，滚动条可移动画面。按原始像素保存裁切位置，缩放不改变画质。</p>
+<p class="muted">左键拖动框选；滚轮以鼠标位置为中心缩放（最小为整图高度适配视窗，上下保留边距）；按住鼠标中键拖动平移。按原始像素保存裁切位置，缩放不改变画质。</p>
 <div id="blank">选择或上传高清母图后显示画面</div>
 <div id="stageViewport" hidden><div id="stage"><img id="masterImage" alt="高清母图原始像素预览" crossorigin="anonymous"><div id="selection"></div></div></div>
 <h3>裁切坐标（原始像素，可手动精修）</h3>
@@ -217,7 +217,17 @@ function autoSaveCropRange(){
  return pendingCropSave;
 }
 function showSize(){const m=master;if(!m)return; $("currentMaster").textContent=m.title+" · "+m.original_width+" × "+m.original_height+" px · "+formatBytes(m.original_bytes)+" · SHA-256: "+m.sha256+" · "+m.status; $("publishNote").textContent="当前母图 "+m.title+"；草稿和已发布的参考单独列出。原图的云端文件不会因修改裁切而被重新编码。";}
-function applyZoom(){if(!masterImg||!sourceWidth)return;const viewport=$("stageViewport"),z=Number($("zoom").value),fit=Math.min(1,(viewport.clientWidth-24)/sourceWidth);zoomBase=fit;const width=Math.max(100,Math.round(sourceWidth*fit*z));$("stage").style.width=width+"px";$("zoomLabel").textContent=z===1?"适合屏幕":z.toFixed(2)+"×";drawSelection();}
+function applyZoom(){if(!masterImg||!sourceWidth||!sourceHeight)return;
+ const viewport=$("stageViewport"),z=Number($("zoom").value);
+ const fit=Math.max(0.000001,(viewport.clientHeight-24)/sourceHeight);
+ zoomBase=fit;
+ const width=sourceWidth*fit*z;
+ $("stage").style.width=width+"px";
+ $("stage").style.marginTop=z===1?"12px":"0";
+ $("stage").style.marginBottom=z===1?"12px":"0";
+ $("zoomLabel").textContent=z===1?"高度适配（最小）":z.toFixed(2)+"×";
+ drawSelection();
+}
 async function setImageUrl(url){const im=$("masterImage");im.crossOrigin="anonymous";await new Promise((resolve,reject)=>{im.onload=resolve;im.onerror=()=>reject(new Error("图片加载失败；请检查存储链接与访问权限"));im.src=url;});masterImg=im;sourceWidth=im.naturalWidth;sourceHeight=im.naturalHeight;$("blank").hidden=true;$("stageViewport").hidden=false;$("zoom").value="1";applyZoom();$("fullRect").disabled=false;$("downloadCrop").disabled=false;}
 async function loadFile(file){$("fileCheck").textContent="正在读取原始文件…";if(fileObjectURL)URL.revokeObjectURL(fileObjectURL);if(!file||!/^image\/(jpeg|png|webp)$/.test(file.type))throw Error("请选择 JPG、PNG 或 WebP 原图");selectedFile=file;fileObjectURL=URL.createObjectURL(file);await setImageUrl(fileObjectURL);master=null;selectedCrop=null;setRectangle(null);$("currentMaster").textContent="已读取本地图片，尚未上传";$("fileMeta").textContent=file.name+" · "+sourceWidth+" × "+sourceHeight+" px · "+formatBytes(file.size);if(/货郎图/.test(file.name)&&sourceWidth===5500&&sourceHeight===6500){if(!$("workTitle").value)$("workTitle").value="货郎图";if(!$("sourceUrl").value)$("sourceUrl").value="https://g2.ltfc.net/view/SUHA/608a623142b4355c93c90362";if(!$("author").value)$("author").value="李公麟";if(!$("era").value)$("era").value="北宋";}$("upload").disabled=!user;drafts=[];renderDrafts();
 $("fileCheck").textContent="正在计算原文件 SHA-256…";
@@ -383,6 +393,29 @@ $("stageViewport").addEventListener("wheel",e=>{
  viewport.scrollLeft=anchorX*$("stage").clientWidth-x;
  viewport.scrollTop=anchorY*$("stage").clientHeight-y;
 },{passive:false});
+let middlePan=null;
+const panViewport=$("stageViewport");
+panViewport.addEventListener("pointerdown",e=>{
+ if(!masterImg||e.button!==1)return;
+ e.preventDefault();e.stopPropagation();
+ middlePan={pointerId:e.pointerId,x:e.clientX,y:e.clientY,left:panViewport.scrollLeft,top:panViewport.scrollTop};
+ panViewport.classList.add("middle-panning");
+ panViewport.setPointerCapture(e.pointerId);
+});
+panViewport.addEventListener("pointermove",e=>{
+ if(!middlePan||e.pointerId!==middlePan.pointerId)return;
+ e.preventDefault();
+ panViewport.scrollLeft=middlePan.left-(e.clientX-middlePan.x);
+ panViewport.scrollTop=middlePan.top-(e.clientY-middlePan.y);
+});
+function stopMiddlePan(e){
+ if(!middlePan||e.pointerId!==middlePan.pointerId)return;
+ middlePan=null;panViewport.classList.remove("middle-panning");
+ if(panViewport.hasPointerCapture(e.pointerId))panViewport.releasePointerCapture(e.pointerId);
+}
+panViewport.addEventListener("pointerup",stopMiddlePan);
+panViewport.addEventListener("pointercancel",stopMiddlePan);
+panViewport.addEventListener("auxclick",e=>{if(e.button===1)e.preventDefault();});
 for(const key of ["x","y","w","h"]){$(key).addEventListener("input",()=>{const r=Object.fromEntries(["x","y","w","h"].map(k=>[k,Number($(k).value)]));rectangle=r;drawSelection();});$(key).addEventListener("change",()=>{if(checkRect())autoSaveCropRange().catch(()=>{});});}
 function stageXY(evt){const b=$("stage").getBoundingClientRect();return {x:Math.min(sourceWidth,Math.max(0,Math.round((evt.clientX-b.left)/b.width*sourceWidth))),y:Math.min(sourceHeight,Math.max(0,Math.round((evt.clientY-b.top)/b.height*sourceHeight)))};}
 $("stage").addEventListener("pointerdown",e=>{if(!masterImg||e.button!==0)return;dragStart=stageXY(e);$("stage").setPointerCapture(e.pointerId);setRectangle({x:dragStart.x,y:dragStart.y,w:1,h:1});});
