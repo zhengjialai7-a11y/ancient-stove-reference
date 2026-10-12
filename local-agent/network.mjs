@@ -23,7 +23,7 @@ export function networkError(error,stage,url){
  else if(codes.includes('ECONNREFUSED'))hint='连接被拒绝，请检查代理程序和端口是否运行。';
  else if(codes.includes('ECONNRESET')||codes.includes('UND_ERR_SOCKET'))hint='连接中断，保留已有进度，恢复网络后重试。';
  let hostname='云端服务';try{hostname=new URL(url).hostname;}catch{}
- const result=Error(`${stage}失败：${hostname}（${codes.join(', ')||'NETWORK_ERROR'}）。${hint}`);result.code='ART_NETWORK';return result;
+ const result=Error(`${stage}失败：${hostname}（${codes.join(', ')||'NETWORK_ERROR'}）。${hint}`);result.code='ART_NETWORK';result.stage=stage;result.retryable=timeout||codes.some(c=>['EAI_AGAIN','ETIMEDOUT','ECONNRESET','UND_ERR_CONNECT_TIMEOUT','UND_ERR_HEADERS_TIMEOUT','UND_ERR_SOCKET','ABORT_ERR'].includes(c));return result;
 }
 export async function windowsProxyRoutes(origins){
  // Fixed cloud origins only. Credentials and proxy URLs remain in memory.

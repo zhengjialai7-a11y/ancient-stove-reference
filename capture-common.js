@@ -1,6 +1,6 @@
 (function(root){
  'use strict';
- const labels={pending:'待处理',needs_review:'关联待确认',downloaded:'已下载待上传',failed:'失败待处理',uploaded_unverified:'已上传 · 待回读核验',uploaded:'母图已核验入库',drafts_ready:'草稿待审核',published:'已有发布参考'};
+ const labels={pending:'待处理',needs_review:'关联待确认',downloaded:'已下载待上传',failed:'失败待处理',uploaded_unverified:'已上传 · 待回读核验',uploaded:'已有核验母图',drafts_ready:'草稿待审核',published:'已有发布参考'};
  function sourceKey(url){const m=String(url||'').match(/^https:\/\/g2\.ltfc\.net\/view\/([A-Z0-9_]+)\/([a-f0-9]{24})(?:[/?#]|$)/i);return m?m[1].toUpperCase()+':'+m[2].toLowerCase():null;}
  function normalize(record,idx){
   if(!record||typeof record!=='object'||Array.isArray(record))return null;

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {selectProxyEnvironment,networkError,createCloudTransport} from '../local-agent/network.mjs';
 import {CaptureClient} from '../local-agent/core.mjs';
+import {createHash} from 'node:crypto';
 import https from 'node:https';
 import http from 'node:http';
 import net from 'node:net';
@@ -118,12 +119,18 @@ async function transportFixture(t){
  const [key,cert]=await Promise.all([readFile(keyPath),readFile(certPath)]);
  const sockets=new Set(),connects=[],requests=[];
  const track=socket=>{sockets.add(socket);socket.on('close',()=>sockets.delete(socket));};
+ let droppedOriginal=false;
  const handler=async(req,res)=>{
   requests.push({method:req.method,path:req.url});
   if(req.url==='/redirect'){res.writeHead(302,{location:'https://foreign.example/should-not-be-requested'});res.end();return;}
   if(req.url==='/head'){res.writeHead(200,{'content-length':'999'});res.end();return;}
   if(req.url==='/empty'){res.writeHead(204);res.end();return;}
   if(req.url==='/slow'){res.writeHead(200);res.flushHeaders();res.write(Buffer.from([0,255,17]));return;}
+  if(req.url.endsWith('/streaming-original')||req.url.endsWith('/reset-original')){
+   const original=Buffer.from('original binary bytes streamed across the header deadline');res.writeHead(200);res.flushHeaders();
+   if(req.url.endsWith('/reset-original')){if(!droppedOriginal){droppedOriginal=true;res.write(original.subarray(0,4));setTimeout(()=>req.socket.destroy(),10);return;}res.end(original);return;}
+   let offset=0;const timer=setInterval(()=>{res.write(original.subarray(offset,offset+8));offset+=8;if(offset>=original.length){clearInterval(timer);res.end();}},30);res.on('close',()=>clearInterval(timer));return;
+  }
   const chunks=[];for await(const chunk of req)chunks.push(chunk);
   const bytes=Buffer.concat(chunks);res.writeHead(200,{'content-type':'application/octet-stream','x-request-method':req.method});
   res.write(bytes.subarray(0,17003));setImmediate(()=>res.end(bytes.subarray(17003)));
@@ -193,4 +200,14 @@ test('real HTTPS response stream stops when its request deadline expires',{timeo
  const s=await transportFixture(t);
  const response=await s.transport.fetch(s.api+'/slow',{signal:AbortSignal.timeout(150)});
  await assert.rejects(response.arrayBuffer());
+});
+test('native original readback survives the header deadline on the real Windows-proxy HTTPS transport',async t=>{
+ const s=await transportFixture(t),bytes=Buffer.from('original binary bytes streamed across the header deadline');
+ const client=new CaptureClient({directory:'unused',stateDirectory:'unused',api:s.api,storage:s.storage,fetchImpl:s.transport.fetch,requestTimeout:100,idleTimeout:100,delay:async()=>{}});client.session='test-session';
+ assert.equal(await client.verify('streaming-original',createHash('sha256').update(bytes).digest('hex'),bytes.length),true);
+});
+test('a real HTTPS response reset retries the whole original and checks its final exact bytes',async t=>{
+ const s=await transportFixture(t),bytes=Buffer.from('original binary bytes streamed across the header deadline'),events=[];
+ const client=new CaptureClient({directory:'unused',stateDirectory:'unused',api:s.api,storage:s.storage,fetchImpl:s.transport.fetch,requestTimeout:1000,idleTimeout:1000,delay:async()=>{},event:e=>events.push(e)});client.session='test-session';
+ assert.equal(await client.verify('reset-original',createHash('sha256').update(bytes).digest('hex'),bytes.length),true);assert.equal(events.filter(e=>e.phase==='retrying').length,1);
 });

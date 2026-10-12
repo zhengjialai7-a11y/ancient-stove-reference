@@ -4,7 +4,7 @@ $PackageRoot = Split-Path -Parent $PSScriptRoot
 $InstallRoot = Join-Path $env:LOCALAPPDATA 'ArtCapture'
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
 $AgentRoot = Join-Path $InstallRoot 'agent'
-Write-Host 'Art Capture v0.7.1 - Windows local uploader'
+Write-Host 'Art Capture v0.7.2 - Windows local uploader'
 Write-Host 'First update/reload the extension. Then copy its ID from edge://extensions or chrome://extensions.'
 $ExtensionId = (Read-Host 'Paste the extension ID (32 lowercase letters)').Trim()
 if ($ExtensionId -notmatch '^[a-p]{32}$') { throw 'Invalid extension ID.' }

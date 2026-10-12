@@ -39,7 +39,7 @@ async function handle(message){
    case 'file':result=await client.processFile(message.file);break;
    default:throw Error('未知助手命令');
   }send({id,ok:true,result});
- }catch(e){send({id,ok:false,error:String(e.message).slice(0,300)});}
+ }catch(e){send({id,ok:false,error:String(e.message).slice(0,300),errorInfo:{code:e.code,stage:e.stage,status:e.status,retryable:!!e.retryable,retryAttempts:e.retryAttempts||0}});}
 }
 process.stdin.on('data',bytes=>{try{for(const message of decoder.push(bytes)){if(!message||typeof message.id!=='string'||message.id.length>80)continue;handle(message);}}catch{process.exit(1);}});
 process.stdin.on('end',()=>{client.paused=true;setTimeout(()=>process.exit(0),500);});
