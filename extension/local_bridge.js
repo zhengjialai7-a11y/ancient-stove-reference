@@ -6,7 +6,7 @@
  if(location.origin!==ORIGIN||location.pathname!=='/ancient-stove-reference/queue.html')return;
  window.addEventListener('message',async event=>{
   const m=event.data;if(event.source!==window||event.origin!==ORIGIN||m?.type!=='ART_LOCAL_COMMAND'||typeof m.requestId!=='string'||m.requestId.length>80)return;
-  const commands=new Set(['hello','directory','status','start','pause','resume','retry','validate','validation_status','validation_resume','validation_restart']);if(!commands.has(m.command))return;
+  const commands=new Set(['hello','directory','status','start','pause','resume','retry','validate','validation_status','validation_resume','validation_restart','refresh_session']);if(!commands.has(m.command))return;
   try{const result=await chrome.runtime.sendMessage({type:'localCaptureCommand',command:m.command,ownerId:m.ownerId,tasks:m.tasks,counts:m.counts,accessToken:m.accessToken});window.postMessage({type:'ART_LOCAL_RESULT',requestId:m.requestId,...result},ORIGIN);}
   catch(e){window.postMessage({type:'ART_LOCAL_RESULT',requestId:m.requestId,ok:false,error:e.message},ORIGIN);}
  });

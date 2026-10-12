@@ -27,6 +27,7 @@ async function handle(message){
    case 'hello':{if(client.running){result=client.status();break;}try{await network.refresh();result={...client.status(),network:await client.networkCheck()};}catch(e){result={...client.status(),network:{ok:false,checks:[{label:'Windows 代理设置',ok:false,error:networkError(e,'读取 Windows 代理设置',API).message}]}};}break;}
    case 'status':result=client.status();break;
    case 'session':if(client.running)throw Error('正在上传，不能切换账号或重置网络');try{await network.refresh();}catch(e){throw networkError(e,'读取 Windows 代理设置',API);}result=await client.setSession(message.accessToken);break;
+   case 'refresh_session':result=await client.refreshSession(message.accessToken,message.ownerId);break;
    case 'pause':client.paused=true;result={paused:true};break;
    case 'resume':client.paused=false;result={paused:false};break;
    case 'task':result=await client.completedParts(message.task);break;

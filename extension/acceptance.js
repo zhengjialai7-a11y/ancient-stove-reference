@@ -1,7 +1,7 @@
 'use strict';
 // Real browser/native acceptance checks. No tokens, signed download URLs or local paths in reports.
 const CaptureAcceptance=(()=>{
- const VERSION='0.9.0',LABELS={pipeline:'下载、上传和关联',multi:'多张母图',skip:'失败跳过与留档',pause:'暂停与恢复',repeat:'重复采集复用',restart:'浏览器重启保留'};
+ const VERSION='0.9.1',LABELS={pipeline:'下载、上传和关联',multi:'多张母图',skip:'失败跳过与留档',pause:'暂停与恢复',repeat:'重复采集复用',restart:'浏览器重启保留'};
  const safeError=value=>String(value||'').replace(/\b[A-Z]:\\[^\r\n']+/gi,'[本机路径]').replace(/https?:\/\/[^\s]+/gi,'[下载或请求地址]').replace(/(?:Bearer\s+|access_token[=:]\s*)\S+/gi,'[登录凭据]');
  const now=()=>new Date().toISOString();
  const summary=task=>({id:task.id,source_id:task.source_id,source:task.source,title:task.title,count:task.count,status:task.status,error:task.error?safeError(task.error):null,failures:(task.failures||[]).map(f=>({time:f.time,stage:f.stage,part:f.part,error:safeError(f.error)})),files:(task.files||[]).map(f=>({part:f.part,complete:!!f.complete,masterId:f.masterId||null,projectId:f.projectId||null}))});
@@ -40,7 +40,7 @@ const CaptureAcceptance=(()=>{
    let remaining=list;
    while(remaining.length){
     if(api.state().pauseEpoch!==control)return {paused:true};
-    const result=await api.execute(remaining,{observer,validation:true});
+    const result=await api.execute(remaining,{observer,validation:true,fullReadback:report.phase==='repeat'});
     if(result.paused&&autoPause&&api.state().pauseEpoch===control){
      autoPause=false;const data=await chrome.storage.local.get(['localCaptureTasks','localCaptureOwner']);const probe=report.pauseProbe,saved=(data.localCaptureTasks||[]).find(t=>t.id===probe.taskId),part=saved?.files?.find(f=>f.part===probe.part);
      if(data.localCaptureOwner!==report.owner||!part?.complete||part.masterId!==probe.masterId||saved.count!==probe.count){setCheck('pause','failed','暂停后持久化的分段记录发生变化');return {stopReason:'暂停保存核对失败'};}

@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {CaptureClient,Decoder,frame,dimensions,CHUNK,containedFile} from '../local-agent/core.mjs';
 const owner='11111111-1111-4111-8111-111111111111',taskId='22222222-2222-4222-8222-222222222222',projectId='33333333-3333-4333-8333-333333333333';
 const source='https://g2.ltfc.net/view/SUHA/608a61b2aa7c385c8d9448d5';
@@ -56,6 +57,30 @@ test('persistent resets exhaust three retries and manual pause interrupts the ba
  await assert.rejects(s.client.processFile(s.input),e=>e.code==='ART_PAUSED');assert.equal(calls,1);assert.equal(s.client.running,false);
 });
 test('authentication failures are not retried',async t=>{const s=await setup(t);let calls=0;s.client.fetch=async()=>{calls++;return new Response('',{status:401});};await assert.rejects(s.client.processFile(s.input),e=>e.code==='ART_AUTH');assert.equal(calls,1);});
+function seedComplete(s,count=100,parts=Array.from({length:94},(_,i)=>i+1)){
+ const bytes=picture(),hash=createHash('sha256').update(bytes).digest('hex');s.state.task.resolved_project_id=projectId;s.state.chunks=[bytes];
+ s.state.files=parts.map(part=>({part_index:part,expected_count:count,phase:'complete',sha256:hash,master_id:'master-'+part}));s.state.masters=parts.map(part=>({id:'master-'+part,project_id:projectId,sha256:hash,verified_sha256:hash,verified_at:'2026-10-12T13:50:00Z',original_bytes:bytes.length,storage_path:'masters/'+owner+'/part-'+part+'.png'}));return hash;
+}
+test('94 of 100 resume fetches completed receipts in one batch without reading any cloud original',async t=>{
+ const s=await setup(t);seedComplete(s);const fetch=s.client.fetch,requests=[],events=[];s.client.fetch=async(url,opts)=>{requests.push(new URL(url));return fetch(url,opts);};s.client.event=e=>events.push(e);
+ const result=await s.client.completedParts({...s.input,count:100});assert.deepEqual(result.parts,Array.from({length:94},(_,i)=>i+1));assert.equal(result.receipts.length,94);assert.equal(result.receipts[93].master_id,'master-94');assert.equal(result.verification,'receipts');assert.equal(requests.filter(u=>u.pathname==='/rest/v1/artwork_masters').length,1);assert.equal(requests.some(u=>u.pathname.startsWith('/storage/')),false);assert.equal(events.at(-1).part,95);assert.equal(s.client.running,false);
+});
+test('receipt reuse requires matching task, project, SHA, verified hash, size and completed phase',async t=>{
+ const s=await setup(t);seedComplete(s,8,[1,2,3,4,5,6,7,8]);s.state.masters[1].project_id='other';s.state.masters[2].sha256='a'.repeat(64);s.state.masters[3].verified_sha256='b'.repeat(64);s.state.masters[4].verified_at=null;s.state.masters[5].original_bytes=0;s.state.files[6].phase='failed';s.state.masters.pop();assert.deepEqual((await s.client.completedParts({...s.input,count:8})).parts,[1]);
+ await assert.rejects(s.client.completedParts({...s.input,count:9}),/总张数/);s.state.task.created_by='other';await assert.rejects(s.client.completedParts({...s.input,count:8}),/账号或作品来源/);s.state.task.created_by=owner;await assert.rejects(s.client.completedParts({...s.input,source:source.replace('608a61b2aa7c385c8d9448d5','608a623142b4355c93c903e6'),count:8}),/账号或作品来源/);
+});
+test('explicit acceptance repeat reads full original bytes and detects changed cloud objects',async t=>{
+ const s=await setup(t);seedComplete(s,2,[1,2]);const fetch=s.client.fetch;let readbacks=0;s.client.fetch=async(url,opts)=>{if(new URL(url).pathname.startsWith('/storage/v1/object/'))readbacks++;return fetch(url,opts);};
+ assert.equal((await s.client.completedParts({...s.input,count:2,recheck:true})).verification,'readback');assert.equal(readbacks,2);s.state.corruptReadback=true;await assert.rejects(s.client.completedParts({...s.input,count:2,recheck:true}),/SHA-256/);assert.equal(s.client.running,false);
+});
+test('active same-account credentials rotate in memory without resetting work or resuming a pause',async t=>{
+ const s=await setup(t);s.client.running=true;s.client.context={command:'file',part:95};await s.client.refreshSession('new-ephemeral-token',owner);assert.equal(s.client.session,'new-ephemeral-token');assert.equal(s.client.running,true);assert.deepEqual(s.client.context,{command:'file',part:95});await s.client.save();assert.equal((await readFile(path.join(s.options.stateDirectory,'progress.json'),'utf8')).includes('new-ephemeral-token'),false);
+ s.client.fetch=async()=>new Response(JSON.stringify({id:projectId}));await assert.rejects(s.client.refreshSession('other-user-token',owner),/其他账号/);assert.equal(s.client.session,'new-ephemeral-token');await assert.rejects(s.client.refreshSession('other-user-token',projectId),/账号不匹配/);s.client.paused=true;await assert.rejects(s.client.refreshSession('later-token',owner),e=>e.code==='ART_PAUSED');assert.equal(s.client.paused,true);assert.equal(s.client.session,'new-ephemeral-token');
+});
+test('an expired in-flight metadata request retries only after a verified same-account token rotation',async t=>{
+ const s=await setup(t),fetch=s.client.fetch,headers=[];s.client.delay=async()=>{};s.client.fetch=async(url,opts)=>{if(new URL(url).pathname==='/rest/v1/reference_capture_status'){headers.push(opts.headers.authorization);if(headers.length===1){await s.client.refreshSession('fresh-token',owner);return new Response('',{status:401});}}return fetch(url,opts);};
+ await s.client.checkTask(taskId,source);assert.deepEqual(headers,['Bearer only-in-memory-session','Bearer fresh-token']);
+});
 test('upload offset recovery has one retry budget instead of nesting another three HEAD retries',async t=>{
  const s=await setup(t),fetch=s.client.fetch;let heads=0,patches=0;s.client.delay=async()=>{};
  s.client.fetch=async(url,options)=>{if(options.method==='PATCH'){patches++;throw Object.assign(Error('reset'),{code:'ECONNRESET'});}if(options.method==='HEAD'){heads++;throw Object.assign(Error('reset'),{code:'ECONNRESET'});}return fetch(url,options);};

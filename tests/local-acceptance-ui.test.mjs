@@ -36,7 +36,7 @@ test('queue ignores a different account validation progress and keeps its own re
 });
 
 test('an old plugin returns an immediate upgrade message instead of timing out on new validation commands',async()=>{
- const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.9.0/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+ const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.9.1/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
 });
 test('an account change clears the visible acceptance report and disables its export',async()=>{
  const ui=queueUI();await ui.$('localPrepare').onclick();const done=ui.f.waitForValidation();await ui.$('localValidate').onclick();await done;await new Promise(setImmediate);assert.equal(ui.$('localValidationReport').children.length,6);ui.authChange('SIGNED_IN',{user:{id:'other-owner'}});assert.equal(ui.$('localValidationReport').children.length,0);assert.equal(ui.$('localValidationExport').disabled,true);
@@ -51,5 +51,18 @@ test('the single resume action continues the blocked acceptance report rather th
  ui.f.configure({nativeError:null});const resumed=ui.f.waitForValidation();await ui.$('localResume').onclick();const next=await resumed;assert.equal(next.id,report.id);assert.equal(next.status,'finished');assert.equal(ui.commands.filter(m=>m.command==='validation_resume').length,1);assert.equal(ui.commands.some(m=>m.command==='resume'),false);
 });
 test('a selected mode remains selected when status is refreshed and an old helper is blocked before starting',async()=>{
- const ui=queueUI();await ui.$('localPrepare').onclick();ui.$('localMode').value='validation';ui.$('localMode').onchange();await ui.$('localStatus').onclick();assert.equal(ui.$('localMode').value,'validation');assert.equal(ui.$('localStart').textContent,'开始一键验收');ui.overrides.hello={ok:true,result:{version:'0.7.1'}};await ui.$('localStart').onclick();assert.match(ui.$('localMessage').textContent,/更新至 0.7.2/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+ const ui=queueUI();await ui.$('localPrepare').onclick();ui.$('localMode').value='validation';ui.$('localMode').onchange();await ui.$('localStatus').onclick();assert.equal(ui.$('localMode').value,'validation');assert.equal(ui.$('localStart').textContent,'开始一键验收');ui.overrides.hello={ok:true,result:{version:'0.7.1'}};await ui.$('localStart').onclick();assert.match(ui.$('localMessage').textContent,/更新至 0.7.3/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+});
+test('refreshed same-account tokens pass through the bridge once without changing progress or storing credentials',async()=>{
+ const ui=queueUI();await ui.f.start([tasks[0]]);await ui.f.done;await new Promise(setImmediate);
+ const state={owner:'ui-owner',phase:'uploading',running:true,taskId:tasks[0].id,part:95,count:100,tasks:[{...tasks[0],count:100,status:'running',files:Array.from({length:94},(_,i)=>({part:i+1,complete:true}))}],message:'上传并核验第 95 / 100 张'};
+ ui.window.postMessage({type:'ART_LOCAL_PROGRESS',state},new URL(QUEUE).origin);await new Promise(setImmediate);
+ const refreshed={user:{id:'ui-owner'},access_token:'rotated-ephemeral-token'};ui.authChange('TOKEN_REFRESHED',refreshed);await new Promise(r=>setTimeout(r,20));ui.authChange('TOKEN_REFRESHED',refreshed);await new Promise(r=>setTimeout(r,20));
+ assert.equal(ui.commands.filter(m=>m.command==='refresh_session').length,1);assert.equal(ui.f.events.find(e=>e[0]==='native'&&e[1]==='refresh_session')[2].accessToken,'rotated-ephemeral-token');assert.match(ui.$('localCurrentCount').textContent,/94 \/ 100.*95/);assert.equal(JSON.stringify(ui.f.stored).includes('rotated-ephemeral-token'),false);
+ ui.authChange('TOKEN_REFRESHED',{user:{id:'ui-owner'},access_token:'next-ephemeral-token'});await new Promise(r=>setTimeout(r,20));assert.equal(ui.commands.filter(m=>m.command==='refresh_session').length,2);
+ ui.authChange('TOKEN_REFRESHED',{user:{id:'another-owner'},access_token:'wrong-account-token'});await new Promise(r=>setTimeout(r,20));assert.equal(ui.commands.filter(m=>m.command==='refresh_session').length,2);
+ ui.window.postMessage({type:'ART_LOCAL_PROGRESS',state:{...state,phase:'paused',running:false}},new URL(QUEUE).origin);await new Promise(setImmediate);ui.authChange('TOKEN_REFRESHED',{user:{id:'ui-owner'},access_token:'paused-token'});await new Promise(r=>setTimeout(r,20));assert.equal(ui.commands.filter(m=>m.command==='refresh_session').length,2);
+});
+test('full acceptance readback is labelled as a recheck of a completed image',async()=>{
+ const ui=queueUI();ui.window.postMessage({type:'ART_LOCAL_PROGRESS',state:{owner:'ui-owner',phase:'checking',running:true,tasks:[{...tasks[0],count:100,files:[]}],upload:{command:'task',verification:'readback',phase:'verifying',part:21,bytes:60,total:1000}}},new URL(QUEUE).origin);await new Promise(setImmediate);assert.match(ui.$('localCurrentCount').textContent,/验收复查已完成第 21 张/);assert.equal(ui.$('localProgress').textContent,'回读核验 6%');
 });

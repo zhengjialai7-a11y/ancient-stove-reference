@@ -11,6 +11,7 @@ test('one click runs real cancel/skip, multi-image pause/resume and duplicate cl
  const cancelled=f.events.find(e=>e[0]==='cancel')[1];assert.equal(report.downloads.some(d=>d.downloadId===cancelled),false);
  assert.equal(report.uploads.length,4);assert.equal(report.checks.repeat.evidence.downloads,0);assert.equal(report.checks.repeat.evidence.uploads,0);assert.equal(report.reuses.some(r=>r.taskId===report.pauseProbe.taskId&&r.part===report.pauseProbe.part),true);
  assert.ok(f.events.some(e=>e[0]==='native'&&e[1]==='pause'));assert.equal(report.tasks.length,2);assert.equal(f.tabs.size,0,'automatic pause and resume must close their own artwork tabs');
+ const taskChecks=f.events.filter(e=>e[0]==='native'&&e[1]==='task').map(e=>e[2].task);assert.ok(taskChecks.some(t=>t.recheck===false));assert.equal(taskChecks.filter(t=>t.recheck===true).length,2,'acceptance repeat must request full cloud readback for both artworks');
  assert.equal(JSON.stringify(report).includes('test-session-in-memory'),false);assert.equal(JSON.stringify(report).includes('C:\\Downloads'),false);assert.equal(JSON.stringify(report).includes('blob:https'),false);
 });
 test('single-image works and downloads that finish before cancellation stay pending instead of claiming coverage',async()=>{
