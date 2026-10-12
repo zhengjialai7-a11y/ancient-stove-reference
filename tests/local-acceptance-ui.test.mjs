@@ -36,7 +36,7 @@ test('queue ignores a different account validation progress and keeps its own re
 });
 
 test('an old plugin returns an immediate upgrade message instead of timing out on new validation commands',async()=>{
- const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.8.0/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+ const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.8.1/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
 });
 test('an account change clears the visible acceptance report and disables its export',async()=>{
  const ui=queueUI();await ui.$('localPrepare').onclick();const done=ui.f.waitForValidation();await ui.$('localValidate').onclick();await done;await new Promise(setImmediate);assert.equal(ui.$('localValidationReport').children.length,6);ui.authChange('SIGNED_IN',{user:{id:'other-owner'}});assert.equal(ui.$('localValidationReport').children.length,0);assert.equal(ui.$('localValidationExport').disabled,true);

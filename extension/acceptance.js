@@ -1,10 +1,15 @@
 'use strict';
 // Real browser/native acceptance checks. No tokens, signed download URLs or local paths in reports.
 const CaptureAcceptance=(()=>{
- const VERSION='0.8.0',LABELS={pipeline:'下载、上传和关联',multi:'多张母图',skip:'失败跳过与留档',pause:'暂停与恢复',repeat:'重复采集复用',restart:'浏览器重启保留'};
+ const VERSION='0.8.1',LABELS={pipeline:'下载、上传和关联',multi:'多张母图',skip:'失败跳过与留档',pause:'暂停与恢复',repeat:'重复采集复用',restart:'浏览器重启保留'};
  const safeError=value=>String(value||'').replace(/\b[A-Z]:\\[^\r\n']+/gi,'[本机路径]').replace(/https?:\/\/[^\s]+/gi,'[下载或请求地址]').replace(/(?:Bearer\s+|access_token[=:]\s*)\S+/gi,'[登录凭据]');
  const now=()=>new Date().toISOString();
  const summary=task=>({id:task.id,source_id:task.source_id,source:task.source,title:task.title,count:task.count,status:task.status,error:task.error?safeError(task.error):null,failures:(task.failures||[]).map(f=>({time:f.time,stage:f.stage,part:f.part,error:safeError(f.error)})),files:(task.files||[]).map(f=>({part:f.part,complete:!!f.complete,masterId:f.masterId||null,projectId:f.projectId||null}))});
+ // Chrome storage may reorder object keys. Compare record values and match files by part.
+ const byPart=files=>[...(files||[])].sort((a,b)=>a.part-b.part);
+ function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])]));return value;}
+ const sameData=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
+ function differences(task,baseline){if(!task)return ['record'];const current=summary(task),previous={...baseline,files:byPart(baseline.files)};current.files=byPart(current.files);return [...new Set([...Object.keys(current),...Object.keys(previous)])].sort().filter(key=>!sameData(current[key],previous[key]));}
  function create(api){
   let report=null,busy=false,control=0,autoPause=false;
   const sameOwner=()=>report&&api.state().owner===report.owner;
@@ -65,14 +70,21 @@ const CaptureAcceptance=(()=>{
     }
     if(report.phase==='repeat'){
      const complete=api.state().tasks.filter(t=>report.repeatBaseline.some(s=>s.id===t.id));
-     if(complete.length){const result=await collect(complete);if(result.paused){report.status='paused';report.error=result.stopReason?safeError(result.stopReason):null;await save('验收已暂停，可点击继续验收');return;}if(result.stopReason)throw Error(result.stopReason);const downloads=report.downloads.filter(d=>d.phase==='repeat'),uploads=report.uploads.filter(u=>u.phase==='repeat'),stable=report.repeatBaseline.every(old=>{const task=api.state().tasks.find(t=>t.id===old.id);return task?.status==='complete'&&task.count===old.count&&JSON.stringify(summary(task).files)===JSON.stringify(old.files);});const allVerified=complete.every(t=>report.verified.some(v=>v.phase==='repeat'&&v.taskId===t.id&&v.parts.length===t.count&&new Set(v.parts).size===t.count));setCheck('repeat',stable&&!downloads.length&&!uploads.length&&allVerified?'passed':'failed','复跑新增下载 '+downloads.length+' 次，新增上传 '+uploads.length+' 次；核对分段回读结果及母图 ID',{downloads:downloads.length,uploads:uploads.length,stable,allVerified});}
+     if(complete.length){const result=await collect(complete);if(result.paused){report.status='paused';report.error=result.stopReason?safeError(result.stopReason):null;await save('验收已暂停，可点击继续验收');return;}if(result.stopReason)throw Error(result.stopReason);const downloads=report.downloads.filter(d=>d.phase==='repeat'),uploads=report.uploads.filter(u=>u.phase==='repeat'),stable=report.repeatBaseline.every(old=>{const task=api.state().tasks.find(t=>t.id===old.id);return task?.status==='complete'&&task.count===old.count&&sameData(byPart(summary(task).files),byPart(old.files));});const allVerified=complete.every(t=>report.verified.some(v=>v.phase==='repeat'&&v.taskId===t.id&&v.parts.length===t.count&&new Set(v.parts).size===t.count));setCheck('repeat',stable&&!downloads.length&&!uploads.length&&allVerified?'passed':'failed','复跑新增下载 '+downloads.length+' 次，新增上传 '+uploads.length+' 次；核对分段回读结果及母图 ID',{downloads:downloads.length,uploads:uploads.length,stable,allVerified});}
      report.phase='done';report.status='finished';report.finishedAt=now();report.restartBaseline=api.state().tasks.map(summary);const bootData=await chrome.storage.local.get('localCaptureBrowserBoot');report.restartBaselineBootId=bootData.localCaptureBrowserBoot?.id||report.baselineBootId;await save('自动验收结束；通过 '+Object.values(report.checks).filter(c=>c.status==='passed').length+' 项，待验证 '+Object.values(report.checks).filter(c=>c.status==='pending').length+' 项。浏览器重启保留可单独检查。');
     }
    }catch(e){report.status=api.state().pauseEpoch!==control?'paused':'blocked';report.error=safeError(e.message);await save('验收'+(report.status==='paused'?'已暂停':'已停止')+'：'+report.error+'；记录已保留');}
    finally{busy=false;}
   }
   async function status(owner){if(busy&&report?.owner===owner)return structuredClone(report);const data=await chrome.storage.local.get('localCaptureValidation');const saved=data.localCaptureValidation;if(!saved||saved.owner!==owner)return null;report=saved;if(report.status==='running')report={...report,status:'paused',error:'浏览器或插件执行已中断，点击继续验收'};return structuredClone(report);}
-  async function checkRestart(owner){const data=await chrome.storage.local.get(['localCaptureValidation','localCaptureBrowserBoot','localCaptureHistory']);const saved=data.localCaptureValidation;if(!saved||saved.owner!==owner)throw Error('没有当前账号的验收报告');if(saved.status!=='finished')throw Error('请先完成自动验收再检查重启保留');report=saved;const boot=data.localCaptureBrowserBoot,changed=!!boot&&boot.event==='startup'&&boot.id!==(report.restartBaselineBootId||report.baselineBootId),kept=(report.restartBaseline||[]).every(old=>(data.localCaptureHistory||[]).some(t=>t.owner===owner&&t.id===old.id&&JSON.stringify(summary(t))===JSON.stringify(old)));setCheck('restart',!changed?'pending':kept?'passed':'failed',!changed?'尚未检测到浏览器重新启动；完全退出浏览器后重新打开，再检查':kept?'浏览器启动事件已记录；作品状态、分段 ID 和失败记录均保留':'重启后保存的作品或分段记录不一致',{bootAt:boot?.at||null,changed,kept});await save();return structuredClone(report);}
+  async function checkRestart(owner){
+   const data=await chrome.storage.local.get(['localCaptureValidation','localCaptureBrowserBoot','localCaptureHistory']),saved=data.localCaptureValidation;
+   if(!saved||saved.owner!==owner)throw Error('没有当前账号的验收报告');if(saved.status!=='finished')throw Error('请先完成自动验收再检查重启保留');report=saved;
+   const boot=data.localCaptureBrowserBoot,changed=!!boot&&boot.event==='startup'&&boot.id!==(report.restartBaselineBootId||report.baselineBootId),baseline=report.restartBaseline||[],mismatches=baseline.map(old=>({taskId:old.id,fields:differences((data.localCaptureHistory||[]).find(t=>t.owner===owner&&t.id===old.id),old)})).filter(d=>d.fields.length);
+   if(!baseline.length||baseline.length!==report.taskIds.length||!report.taskIds.every(id=>baseline.some(t=>t.id===id)))mismatches.push({taskId:null,fields:['baseline']});
+   const kept=!mismatches.length;
+   setCheck('restart',!changed?'pending':kept?'passed':'failed',!changed?'尚未检测到浏览器重新启动；完全退出浏览器后重新打开，再检查':kept?'浏览器启动事件已记录；作品状态、分段 ID 和失败记录均保留':'重启后保存的作品或分段记录不一致',{bootAt:boot?.at||null,changed,kept,differences:mismatches,checkedWithVersion:VERSION});await save();return structuredClone(report);
+  }
   return {prepare,run,status,checkRestart,isBusy:()=>busy,report:()=>report};
  }
  async function browserStarted(){await chrome.storage.local.set({localCaptureBrowserBoot:{id:crypto.randomUUID(),at:now(),event:'startup'}});}

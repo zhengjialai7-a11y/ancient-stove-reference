@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {flow,tasks} from './local-flow-helper.mjs';
 
 async function runValidation(options={}){const f=flow({acceptance:true,...options});const finished=f.waitForValidation();assert.equal((await f.command('validate',{tasks})).ok,true);return {f,report:await finished};}
+function reorderKeys(value){if(Array.isArray(value))return value.map(reorderKeys);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,reorderKeys(value[key])]));return value;}
 test('one click runs real cancel/skip, multi-image pause/resume and duplicate cloud-readback reuse',async()=>{
  const {f,report}=await runValidation();
  assert.equal(report.status,'finished');for(const key of ['pipeline','multi','skip','pause','repeat'])assert.equal(report.checks[key].status,'passed',key+' '+report.checks[key].detail);
@@ -33,6 +34,15 @@ test('extension worker reload alone cannot pass a real browser startup retention
 });
 test('browser startup plus retained parts and failure history passes restart retention',async()=>{
  const {f}=await runValidation();const restarted=flow({acceptance:true,initialStored:f.stored});await restarted.acceptanceAPI.browserStarted();const result=await restarted.command('validation_restart');assert.equal(result.ok,true);assert.equal(result.result.report.checks.restart.status,'passed');assert.equal(result.result.report.tasks.length,2);
+});
+test('browser storage property order and multipart record order do not falsely fail restart retention',async()=>{
+ const {f}=await runValidation();const saved=reorderKeys(f.stored);for(const task of saved.localCaptureHistory)task.files.reverse();const restarted=flow({acceptance:true,initialStored:saved});await restarted.acceptanceAPI.browserStarted();const checked=await restarted.command('validation_restart');assert.equal(checked.ok,true);assert.equal(checked.result.report.checks.restart.status,'passed');assert.equal(checked.result.report.checks.restart.evidence.differences.length,0);
+});
+test('a stored repeat baseline with reordered JSON keys can resume and reuse the same masters',async()=>{
+ const {f}=await runValidation();const saved=reorderKeys(f.stored);saved.localCaptureValidation.status='paused';saved.localCaptureValidation.phase='repeat';const restored=flow({acceptance:true,initialStored:saved}),done=restored.waitForValidation();assert.equal((await restored.command('validation_resume')).ok,true);const report=await done;assert.equal(report.checks.repeat.status,'passed');assert.equal(report.checks.repeat.evidence.uploads,0);assert.equal(restored.events.some(e=>e[0]==='click-original'),false);
+});
+test('changed master IDs still fail restart retention and identify the affected part records',async()=>{
+ const {f}=await runValidation();const saved=reorderKeys(f.stored);saved.localCaptureHistory.find(t=>t.id===tasks[1].id).files[0].masterId='changed-master';const restarted=flow({acceptance:true,initialStored:saved});await restarted.acceptanceAPI.browserStarted();const checked=await restarted.command('validation_restart');assert.equal(checked.result.report.checks.restart.status,'failed');assert.deepEqual(checked.result.report.checks.restart.evidence.differences,[{taskId:tasks[1].id,fields:['files']}]);
 });
 test('losing historical failure records after browser startup fails retention',async()=>{
  const {f}=await runValidation();const saved=structuredClone(f.stored);saved.localCaptureHistory.find(t=>t.id===tasks[0].id).failures=[];const restarted=flow({acceptance:true,initialStored:saved});await restarted.acceptanceAPI.browserStarted();const checked=await restarted.command('validation_restart');assert.equal(checked.result.report.checks.restart.status,'failed');
