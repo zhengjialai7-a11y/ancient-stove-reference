@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "美术绘制参考 · 原图采集助手",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "本机原图下载、云端上传核验和逐张关联；支持三幅作品试跑",
   "permissions": [
     "downloads",

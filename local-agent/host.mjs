@@ -38,6 +38,7 @@ async function handle(message){
     const directory=stdout.trim();if(!directory)throw Error('未选择下载目录');client.directory=directory;config.directory=directory;await writeFile(configPath,JSON.stringify(config,null,2));result={directory};break;
    }
    case 'file':result=await client.processFile(message.file);break;
+   case 'cleanup':result=await client.cleanupCompleted();break;
    default:throw Error('未知助手命令');
   }send({id,ok:true,result});
  }catch(e){send({id,ok:false,error:String(e.message).slice(0,300),errorInfo:{code:e.code,stage:e.stage,status:e.status,retryable:!!e.retryable,retryAttempts:e.retryAttempts||0}});}

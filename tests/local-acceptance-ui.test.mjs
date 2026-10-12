@@ -36,7 +36,7 @@ test('queue ignores a different account validation progress and keeps its own re
 });
 
 test('an old plugin returns an immediate upgrade message instead of timing out on new validation commands',async()=>{
- const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.9.1/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+ const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.9.2/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
 });
 test('an account change clears the visible acceptance report and disables its export',async()=>{
  const ui=queueUI();await ui.$('localPrepare').onclick();const done=ui.f.waitForValidation();await ui.$('localValidate').onclick();await done;await new Promise(setImmediate);assert.equal(ui.$('localValidationReport').children.length,6);ui.authChange('SIGNED_IN',{user:{id:'other-owner'}});assert.equal(ui.$('localValidationReport').children.length,0);assert.equal(ui.$('localValidationExport').disabled,true);
@@ -51,7 +51,7 @@ test('the single resume action continues the blocked acceptance report rather th
  ui.f.configure({nativeError:null});const resumed=ui.f.waitForValidation();await ui.$('localResume').onclick();const next=await resumed;assert.equal(next.id,report.id);assert.equal(next.status,'finished');assert.equal(ui.commands.filter(m=>m.command==='validation_resume').length,1);assert.equal(ui.commands.some(m=>m.command==='resume'),false);
 });
 test('a selected mode remains selected when status is refreshed and an old helper is blocked before starting',async()=>{
- const ui=queueUI();await ui.$('localPrepare').onclick();ui.$('localMode').value='validation';ui.$('localMode').onchange();await ui.$('localStatus').onclick();assert.equal(ui.$('localMode').value,'validation');assert.equal(ui.$('localStart').textContent,'开始一键验收');ui.overrides.hello={ok:true,result:{version:'0.7.1'}};await ui.$('localStart').onclick();assert.match(ui.$('localMessage').textContent,/更新至 0.7.3/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+ const ui=queueUI();await ui.$('localPrepare').onclick();ui.$('localMode').value='validation';ui.$('localMode').onchange();await ui.$('localStatus').onclick();assert.equal(ui.$('localMode').value,'validation');assert.equal(ui.$('localStart').textContent,'开始一键验收');ui.overrides.hello={ok:true,result:{version:'0.7.1'}};await ui.$('localStart').onclick();assert.match(ui.$('localMessage').textContent,/更新至 0.7.4/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
 });
 test('refreshed same-account tokens pass through the bridge once without changing progress or storing credentials',async()=>{
  const ui=queueUI();await ui.f.start([tasks[0]]);await ui.f.done;await new Promise(setImmediate);
@@ -65,4 +65,25 @@ test('refreshed same-account tokens pass through the bridge once without changin
 });
 test('full acceptance readback is labelled as a recheck of a completed image',async()=>{
  const ui=queueUI();ui.window.postMessage({type:'ART_LOCAL_PROGRESS',state:{owner:'ui-owner',phase:'checking',running:true,tasks:[{...tasks[0],count:100,files:[]}],upload:{command:'task',verification:'readback',phase:'verifying',part:21,bytes:60,total:1000}}},new URL(QUEUE).origin);await new Promise(setImmediate);assert.match(ui.$('localCurrentCount').textContent,/验收复查已完成第 21 张/);assert.equal(ui.$('localProgress').textContent,'回读核验 6%');
+});
+test('automatic cleanup is opt-in, saved for its account and passed to uploads through the real UI bridge',async()=>{
+ const ui=queueUI({acceptance:false});await ui.$('localStatus').onclick();assert.equal(ui.$('localAutoCleanup').checked,false);ui.$('localAutoCleanup').checked=true;await ui.$('localAutoCleanup').onchange();assert.equal(ui.f.stored.localCaptureCleanupPrefs['ui-owner'],true);
+ await ui.$('localPrepare').onclick();await ui.$('localStart').onclick();await ui.f.done;await new Promise(setImmediate);assert.equal(ui.commands.find(m=>m.command==='start').autoCleanup,true);assert.equal(ui.f.events.filter(e=>e[0]==='native'&&e[1]==='file').every(e=>e[2].file.autoCleanup),true);assert.equal(ui.f.stored.localCaptureTasks.every(t=>t.files.every(f=>f.localDeleted)),true);assert.match(ui.$('localLog').children[0].children[1].textContent,/本地已清理 2 张/);
+ const status=await ui.f.command('status',{ownerId:'other-owner'});assert.equal(status.result.autoCleanup,false);
+});
+test('manual cleanup uses authenticated commands and reports freed space without changing capture results',async()=>{
+ const ui=queueUI();await ui.$('localCleanupCompleted').onclick();const command=ui.commands.find(m=>m.command==='cleanup');assert.equal(command.ownerId,'ui-owner');assert.equal(command.accessToken,'ephemeral-ui-session');assert.match(ui.$('localCleanupStatus').textContent,/已删除 2 张/);assert.equal(ui.f.stored.localCaptureTasks,undefined);assert.equal(JSON.stringify(ui.f.stored).includes('ephemeral-ui-session'),false);
+});
+test('cleanup progress remains separate from capture and ignores another account',async()=>{
+ const ui=queueUI();ui.window.postMessage({type:'ART_LOCAL_CLEANUP_PROGRESS',state:{owner:'ui-owner',phase:'verifying',stage:'回读核验母图',index:21,totalFiles:100,bytes:6,total:100}},new URL(QUEUE).origin);await new Promise(setImmediate);assert.match(ui.$('localCleanupStatus').textContent,/清理 21 \/ 100.*6%/);assert.equal(ui.$('localSummaryState').textContent,'正在清理本地原图');assert.equal(ui.$('localStart').disabled,true);assert.equal(ui.$('localPause').disabled,false);
+ ui.window.postMessage({type:'ART_LOCAL_CLEANUP_PROGRESS',state:{owner:'other-owner',phase:'finished',stage:'秘密记录'}},new URL(QUEUE).origin);await new Promise(setImmediate);assert.equal(ui.$('localStart').disabled,true);assert.equal(ui.$('localCleanupStatus').textContent.includes('秘密记录'),false);
+ ui.window.postMessage({type:'ART_LOCAL_CLEANUP_PROGRESS',state:{owner:'ui-owner',phase:'finished'}},new URL(QUEUE).origin);await new Promise(setImmediate);assert.equal(ui.$('localStart').disabled,false);
+});
+test('an old plugin refuses the cleanup option immediately with its upgrade instruction',async()=>{
+ const ui=queueUI();ui.overrides.status={ok:true,result:{version:'0.9.1',owner:'ui-owner',tasks:[],history:[]}};ui.$('localAutoCleanup').checked=true;await ui.$('localAutoCleanup').onchange();assert.match(ui.$('localCleanupStatus').textContent,/v0.9.2/);assert.equal(ui.commands.some(m=>m.command==='cleanup_settings'),false);
+});
+test('manual cleanup refreshes its own credentials and pauses on account change even without a prior capture batch',async()=>{
+ let release;const blocker=new Promise(r=>{release=r;});const ui=queueUI({nativeWait:{command:'cleanup',promise:blocker}});const cleaning=ui.$('localCleanupCompleted').onclick();await new Promise(r=>setTimeout(r,20));assert.ok(ui.f.events.some(e=>e[0]==='native'&&e[1]==='cleanup'));
+ ui.authChange('TOKEN_REFRESHED',{user:{id:'ui-owner'},access_token:'cleanup-refreshed-token'});await new Promise(r=>setTimeout(r,20));assert.ok(ui.f.events.some(e=>e[0]==='native'&&e[1]==='refresh_session'&&e[2].ownerId==='ui-owner'));assert.equal(JSON.stringify(ui.f.stored).includes('cleanup-refreshed-token'),false);
+ ui.authChange('SIGNED_IN',{user:{id:'other-owner'}});await new Promise(setImmediate);assert.ok(ui.f.events.some(e=>e[0]==='native'&&e[1]==='pause'));release();await cleaning;
 });

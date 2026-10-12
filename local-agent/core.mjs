@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {createReadStream} from 'node:fs';
-import {readFile,writeFile,rename,mkdir,realpath,stat,open} from 'node:fs/promises';
+import {readFile,writeFile,rename,mkdir,realpath,stat,lstat,unlink,open} from 'node:fs/promises';
 import path from 'node:path';
 import {networkError} from './network.mjs';
 import {setTimeout as sleep} from 'node:timers/promises';
@@ -21,7 +21,7 @@ export function dimensions(b){
  }
  throw Error('文件不是可识别的原始 JPEG/PNG/WebP 图片');
 }
-export async function containedFile(root,filename){const base=await realpath(root),file=await realpath(filename);const relative=path.relative(base,file);if(!relative||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error('下载文件不在授权目录内');const s=await stat(file);if(!s.isFile()||!s.size||/\.(?:crdownload|part|tmp)$/i.test(file))throw Error('原图尚未下载完成');return {file,size:s.size,mtime:s.mtimeMs};}
+export async function containedFile(root,filename){const base=await realpath(root),file=await realpath(filename);const relative=path.relative(base,file);if(!relative||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error('下载文件不在授权目录内');const s=await stat(file);if(!s.isFile()||!s.size||/\.(?:crdownload|part|tmp)$/i.test(file))throw Error('原图尚未下载完成');return {file,size:s.size,mtime:s.mtimeMs,dev:s.dev,ino:s.ino};}
 export class CaptureClient {
  constructor({directory,stateDirectory,fetchImpl=fetch,api=API,storage=STORAGE,event=()=>{},retryDelays=[2000,5000,10000],delay=(ms,signal)=>sleep(ms,undefined,{signal}),requestTimeout=45000,uploadTimeout=120000,idleTimeout=60000}){this.directory=directory;this.stateDirectory=stateDirectory;this.fetch=fetchImpl;this.api=api;this.storage=storage;this.event=event;this.session=null;this.owner=null;this._paused=false;this.activeRequests=new Set();this.pauseController=new AbortController();this.retryDelays=retryDelays;this.delay=delay;this.requestTimeout=requestTimeout;this.uploadTimeout=uploadTimeout;this.idleTimeout=idleTimeout;this.context={};this.records={};this.tus={};this.running=false;}
  get paused(){return this._paused;}
@@ -72,9 +72,35 @@ export class CaptureClient {
    this.emit({phase:'receipts',stage:'核对云端已完成分段记录'});const candidates=rows.filter(r=>r.phase==='complete'&&r.master_id&&Number.isInteger(r.part_index)&&r.part_index>=1&&r.part_index<=input.count),ids=[...new Set(candidates.map(r=>r.master_id))],masters=new Map();
    for(let start=0;start<ids.length;start+=100){const found=await this.rows('artwork_masters',{created_by:'eq.'+this.owner,id:'in.('+ids.slice(start,start+100).join(',')+')',select:'id,project_id,sha256,verified_sha256,verified_at,original_bytes,storage_path'});for(const m of found)masters.set(m.id,m);}
    const receipts=[];for(const r of candidates){const m=masters.get(r.master_id);if(!m||m.project_id!==task.resolved_project_id||m.sha256!==r.sha256||m.verified_sha256!==m.sha256||!/^[a-f0-9]{64}$/.test(m.sha256||'')||!m.verified_at||!m.storage_path||!Number.isSafeInteger(Number(m.original_bytes))||Number(m.original_bytes)<1)continue;
-    if(input.recheck===true){this.context.part=r.part_index;await this.verify(m.storage_path,m.sha256,Number(m.original_bytes));}receipts.push({part:r.part_index,master_id:m.id,project_id:m.project_id});
+    if(input.recheck===true){this.context.part=r.part_index;await this.verify(m.storage_path,m.sha256,Number(m.original_bytes));}const local=this.records[this.owner+':'+input.taskId+':'+r.part_index];receipts.push({part:r.part_index,master_id:m.id,project_id:m.project_id,...(local?.hash===m.sha256&&local.cleanup?{cleanup:local.cleanup}:{})});
    }
-   receipts.sort((a,b)=>a.part-b.part);const parts=receipts.map(r=>r.part),nextPart=Array.from({length:input.count},(_,i)=>i+1).find(p=>!parts.includes(p))||null;this.emit({phase:'receipts',stage:'已确认 '+parts.length+' 张完成记录'+(nextPart?'，继续第 '+nextPart+' 张':''),part:nextPart,confirmed:parts.length});return {parts,receipts,verification};
+   receipts.sort((a,b)=>a.part-b.part);const parts=receipts.map(r=>r.part),nextPart=Array.from({length:input.count},(_,i)=>i+1).find(p=>!parts.includes(p))||null;this.emit({phase:'receipts',stage:'已确认 '+parts.length+' 张完成记录'+(nextPart?'，继续第 '+nextPart+' 张':''),part:nextPart,confirmed:parts.length});const deletedParts=Object.entries(this.records).filter(([key,r])=>key===this.owner+':'+input.taskId+':'+r.part&&r.source===input.source&&r.count===input.count&&r.cleanup?.status==='deleted').map(([,r])=>r.part);return {parts,receipts,verification,deletedParts};
+  }finally{this.running=false;}
+ }
+ async cleanupRecord(record,{recheck=true,snapshot=null}={}){
+  if(record.cleanup?.status==='deleted')return record.cleanup;
+  let cleanup;try{
+   if(this.paused)throw this.pauseError();if(record.phase!=='complete'||!record.masterId||!record.projectId||!/^[a-f0-9]{64}$/.test(record.hash||''))throw Error('缺少已完成上传记录，保留本地文件');
+   const task=await this.checkTask(record.taskId,record.source),row=(await this.rows('reference_capture_files',{task_id:'eq.'+record.taskId,part_index:'eq.'+record.part,select:'phase,expected_count,sha256,master_id'}))[0];
+   const master=(await this.rows('artwork_masters',{created_by:'eq.'+this.owner,id:'eq.'+record.masterId,select:'id,created_by,project_id,sha256,verified_sha256,verified_at,original_bytes,storage_path'}))[0];
+   if(!row||row.phase!=='complete'||row.expected_count!==record.count||row.sha256!==record.hash||row.master_id!==record.masterId||!master||master.id!==record.masterId||master.created_by!==this.owner||master.project_id!==record.projectId||task.resolved_project_id!==record.projectId||master.sha256!==record.hash||master.verified_sha256!==record.hash||!master.verified_at||Number(master.original_bytes)!==record.bytes||!master.storage_path)throw Error('云端完成记录或母图关联不一致，保留本地文件');
+   const before=await lstat(record.filename),local=await containedFile(this.directory,record.filename);if(before.isSymbolicLink()||!before.isFile()||local.file!==record.filename||local.size!==record.bytes)throw Error('本地路径或文件已变化，保留文件');
+   if(snapshot&&(local.dev!==snapshot.dev||local.ino!==snapshot.ino||local.size!==snapshot.size||local.mtime!==snapshot.mtime))throw Error('上传后本地文件已变化，保留文件');
+   if(recheck)await this.verify(master.storage_path,record.hash,record.bytes);
+   this.emit({phase:'cleaning',stage:'清理前核对本地原图',bytes:0,total:record.bytes});const hash=createHash('sha256');let bytes=0,lastEvent=0;
+   for await(const chunk of createReadStream(local.file)){if(this.paused)throw this.pauseError();hash.update(chunk);bytes+=chunk.length;if(Date.now()-lastEvent>=500){this.emit({phase:'cleaning',stage:'清理前核对本地原图',bytes,total:record.bytes});lastEvent=Date.now();}}
+   const after=await lstat(record.filename);if(after.isSymbolicLink()||!after.isFile()||after.dev!==local.dev||after.ino!==local.ino||after.size!==local.size||after.mtimeMs!==local.mtime||await realpath(record.filename)!==local.file||bytes!==record.bytes||hash.digest('hex')!==record.hash)throw Error('本地文件与已上传原图不一致，保留文件');
+   if(this.paused)throw this.pauseError();await (this.removeFile||unlink)(local.file);cleanup={status:'deleted',bytes:record.bytes,time:new Date().toISOString()};
+  }catch(e){cleanup={status:e.code==='ENOENT'?'missing':'kept',bytes:0,time:new Date().toISOString(),retryable:!!e.retryable,reason:e.code==='ENOENT'?'本地文件已不存在':['EACCES','EPERM','EBUSY'].includes(e.code)?'文件被占用或没有删除权限，已保留':e.message,code:e.code};}
+  record.cleanup=cleanup;try{await this.save();}catch{cleanup.notice='清理结果未能写入本机记录，云端母图已保留';}this.emit({phase:'cleaning',stage:cleanup.status==='deleted'?'本地原图已删除':cleanup.reason,cleanup});return cleanup;
+ }
+ async cleanupCompleted(){
+  if(this.running)throw Error('本机正在处理原图，请先暂停采集');if(!this.owner||!this.session)throw Error('请先登录当前账号');this.running=true;this.context={command:'cleanup',owner:this.owner};
+  const candidates=Object.entries(this.records).filter(([key,r])=>key===this.owner+':'+r.taskId+':'+r.part&&r.phase==='complete'),result={owner:this.owner,total:candidates.length,deleted:0,alreadyDeleted:0,kept:0,missing:0,bytesFreed:0,remaining:0,details:[]};
+  try{for(let index=0;index<candidates.length;index++){if(this.paused){result.remaining=candidates.length-index;result.error='清理已暂停，剩余文件保留';break;}const record=candidates[index][1];this.context={command:'cleanup',owner:this.owner,taskId:record.taskId,part:record.part,count:record.count,index:index+1,totalFiles:candidates.length};this.emit({phase:'cleaning',stage:'正在检查已上传原图 '+(index+1)+' / '+candidates.length});
+    if(record.cleanup?.status==='deleted'){result.alreadyDeleted++;continue;}const cleanup=await this.cleanupRecord(record);result[cleanup.status==='deleted'?'deleted':cleanup.status==='missing'?'missing':'kept']++;result.bytesFreed+=cleanup.bytes||0;if(cleanup.status==='kept'&&result.details.length<20)result.details.push({taskId:record.taskId,part:record.part,reason:cleanup.reason});
+    if(cleanup.retryable||['ART_AUTH','ART_PAUSED','ART_NETWORK'].includes(cleanup.code)){result.error=cleanup.reason;result.remaining=candidates.length-index-1;break;}
+   }this.emit({phase:'finished',stage:'本地原图清理结束',result});return result;
   }finally{this.running=false;}
  }
  safeTus(url){const value=new URL(url,this.storage);const origin=new URL(this.storage).origin;if(value.origin!==origin||!value.pathname.startsWith('/storage/v1/upload/resumable/')||value.username||value.password)throw Error('续传地址不可信');return value.href;}
@@ -131,9 +157,9 @@ export class CaptureClient {
    const after=await stat(verified.file);if(after.size!==verified.size||after.mtimeMs!==verified.mtime)throw Error('原文件在上传期间发生变化');await this.checkTask(input.taskId,input.source);
    const filenameMeta=path.basename(verified.file).match(/^([^_]{1,12})_([^_]{1,30})_(.+?)(?:_\d+(?: \(\d+\))?)?\.(?:jpe?g|png|webp)$/i);
    const r=await this.request(this.api+'/rest/v1/rpc/register_capture_original',{method:'POST',retrySafe:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({p_task_id:input.taskId,p_part_index:input.part,p_expected_count:input.count,p_filename:path.basename(verified.file),p_sha256:hash,p_mime:meta.mime,p_width:meta.width,p_height:meta.height,p_bytes:bytes,p_title:input.title||filenameMeta?.[3]||'',p_author:filenameMeta?.[2]||'',p_era:filenameMeta?.[1]||''})});
-   const result=await r.json();Object.assign(record,{phase:'complete',masterId:result.master_id,projectId:result.project_id,error:null});await this.save();this.event({phase:'complete',taskId:input.taskId,part:input.part,count:input.count});return result;
+   const result=await r.json();Object.assign(record,{phase:'complete',masterId:result.master_id,projectId:result.project_id,error:null});await this.save();const cleanup=input.autoCleanup===true?await this.cleanupRecord(record,{recheck:false,snapshot:verified}):null;this.event({phase:'complete',taskId:input.taskId,part:input.part,count:input.count});return {...result,...(cleanup?{cleanup}:{})};
   }catch(e){if(record){record.phase=this.paused?'paused':'failed';record.error=e.message;await this.save();if(!this.paused)try{await this.ledger(input.taskId,input.part,input.count,{phase:'failed',sha256:record.hash,error:e.message},{retrySafe:false});}catch{}}throw e;}
   finally{this.running=false;}
  }
- status(){return {version:'0.7.3',directory:this.directory,running:this.running,paused:this.paused,records:this.owner?Object.entries(this.records).filter(([k])=>k.startsWith(this.owner+':')).map(([,r])=>r).slice(-100):[]};}
+ status(){return {version:'0.7.4',directory:this.directory,running:this.running,paused:this.paused,records:this.owner?Object.entries(this.records).filter(([k])=>k.startsWith(this.owner+':')).map(([,r])=>r).slice(-100):[]};}
 }

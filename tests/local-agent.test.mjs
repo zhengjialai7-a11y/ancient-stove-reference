@@ -27,7 +27,7 @@ async function setup(t,size=150){const dir=await mkdtemp(path.join(tmpdir(),'cap
    if(method==='HEAD')return new Response(null,{status:200,headers:{'upload-offset':String(Buffer.concat(state.chunks).length)}});
    if(method==='PATCH'){assert.equal(Number(opts.headers['Upload-Offset']),Buffer.concat(state.chunks).length);state.chunks.push(Buffer.from(opts.body));state.patchCalls++;if(state.failAfterFirstChunk&&state.patchCalls===1)throw Error('connection dropped after server accepted bytes');return new Response(null,{status:204,headers:{'upload-offset':String(Buffer.concat(state.chunks).length)}});}
   }
-  if(u.pathname==='/rest/v1/rpc/register_capture_original'){const p=JSON.parse(opts.body);state.rpcCalls.push(p);state.task.resolved_project_id=projectId;state.masters=[{id:'master',project_id:projectId,storage_path:'masters/'+owner+'/'+p.p_sha256+'.png'}];return answer({master_id:'master',project_id:projectId});}
+  if(u.pathname==='/rest/v1/rpc/register_capture_original'){const p=JSON.parse(opts.body);state.rpcCalls.push(p);state.task.resolved_project_id=projectId;state.masters=[{id:'master',created_by:owner,project_id:projectId,sha256:p.p_sha256,verified_sha256:p.p_sha256,verified_at:new Date().toISOString(),original_bytes:p.p_bytes,storage_path:'masters/'+owner+'/'+p.p_sha256+'.png'}];Object.assign(state.files.find(f=>f.part_index===p.p_part_index),{phase:'complete',master_id:'master',sha256:p.p_sha256});return answer({master_id:'master',project_id:projectId});}
   throw Error('unexpected request '+method+' '+u.pathname);
  };
  const options={directory:downloads,stateDirectory:path.join(dir,'state'),fetchImpl:fake,api:'https://api.test',storage:'https://storage.test'};
@@ -80,6 +80,41 @@ test('active same-account credentials rotate in memory without resetting work or
 test('an expired in-flight metadata request retries only after a verified same-account token rotation',async t=>{
  const s=await setup(t),fetch=s.client.fetch,headers=[];s.client.delay=async()=>{};s.client.fetch=async(url,opts)=>{if(new URL(url).pathname==='/rest/v1/reference_capture_status'){headers.push(opts.headers.authorization);if(headers.length===1){await s.client.refreshSession('fresh-token',owner);return new Response('',{status:401});}}return fetch(url,opts);};
  await s.client.checkTask(taskId,source);assert.deepEqual(headers,['Bearer only-in-memory-session','Bearer fresh-token']);
+});
+test('opted-in cleanup removes only the original after registration and keeps exact cloud bytes and receipts',async t=>{
+ const s=await setup(t),original=await readFile(s.input.filename),result=await s.client.processFile({...s.input,autoCleanup:true});assert.equal(result.cleanup.status,'deleted');await assert.rejects(readFile(s.input.filename),e=>e.code==='ENOENT');assert.deepEqual(Buffer.concat(s.state.chunks),original);assert.equal(s.client.status().records[0].phase,'complete');assert.equal(s.state.files[0].phase,'complete');assert.equal(s.state.rpcCalls.length,1);
+ const restarted=new CaptureClient(s.options);await restarted.load();await restarted.setSession('resumed-token');const resumed=await restarted.completedParts(s.input);assert.deepEqual(resumed.parts,[1]);assert.equal(resumed.receipts[0].cleanup.status,'deleted');assert.equal((await restarted.cleanupCompleted()).alreadyDeleted,1);
+});
+test('failed original verification retains the local file even with automatic cleanup enabled',async t=>{
+ const s=await setup(t);s.state.corruptReadback=true;await assert.rejects(s.client.processFile({...s.input,autoCleanup:true}),/SHA-256/);assert.equal((await readFile(s.input.filename)).length,150);assert.equal(s.client.records[owner+':'+taskId+':1'].cleanup,undefined);
+});
+test('cloud receipt disagreement leaves upload complete and keeps the local original',async t=>{
+ const s=await setup(t),fetch=s.client.fetch;s.client.fetch=async(url,opts)=>{const response=await fetch(url,opts);if(new URL(url).pathname==='/rest/v1/rpc/register_capture_original')s.state.masters[0].verified_sha256='f'.repeat(64);return response;};
+ const result=await s.client.processFile({...s.input,autoCleanup:true});assert.equal(result.cleanup.status,'kept');assert.match(result.cleanup.reason,/云端完成记录/);assert.equal((await readFile(s.input.filename)).length,150);assert.equal(s.client.status().records[0].phase,'complete');assert.equal(s.state.files[0].phase,'complete');
+});
+test('a replacement at the download path after upload is retained even when it has identical bytes',async t=>{
+ const s=await setup(t),fetch=s.client.fetch;s.client.fetch=async(url,opts)=>{const response=await fetch(url,opts);if(new URL(url).pathname==='/rest/v1/rpc/register_capture_original'){const {rename}=await import('node:fs/promises');await rename(s.input.filename,s.input.filename+'.backup');await writeFile(s.input.filename,picture());}return response;};
+ const result=await s.client.processFile({...s.input,autoCleanup:true});assert.equal(result.cleanup.status,'kept');assert.match(result.cleanup.reason,/本地文件已变化/);assert.equal((await readFile(s.input.filename)).length,150);
+});
+test('a locked Windows file is recorded as retained and can be cleaned later without re-uploading',async t=>{
+ const s=await setup(t);s.client.removeFile=async()=>{throw Object.assign(Error('locked'),{code:'EPERM'});};const result=await s.client.processFile({...s.input,autoCleanup:true});assert.equal(result.cleanup.status,'kept');assert.match(result.cleanup.reason,/占用或没有删除权限/);assert.equal(s.client.status().records[0].phase,'complete');s.client.removeFile=null;const cleanup=await s.client.cleanupCompleted();assert.equal(cleanup.deleted,1);assert.equal(cleanup.bytesFreed,150);assert.equal(s.state.rpcCalls.length,1);
+});
+test('manual cleanup rechecks cloud bytes and retains a changed local original',async t=>{
+ const s=await setup(t);await s.client.processFile(s.input);const altered=picture();altered[80]=42;await writeFile(s.input.filename,altered);const result=await s.client.cleanupCompleted();assert.equal(result.deleted,0);assert.equal(result.kept,1);assert.match(result.details[0].reason,/本地文件与已上传原图不一致/);assert.deepEqual(await readFile(s.input.filename),altered);
+});
+test('manual cleanup keeps the local copy when the previously verified cloud object is corrupt or missing',async t=>{
+ const s=await setup(t);await s.client.processFile(s.input);s.state.corruptReadback=true;assert.equal((await s.client.cleanupCompleted()).kept,1);assert.equal((await readFile(s.input.filename)).length,150);s.state.corruptReadback=false;s.state.chunks=[];assert.equal((await s.client.cleanupCompleted()).deleted,0);assert.equal((await readFile(s.input.filename)).length,150);
+});
+test('cleanup refuses outside paths, symbolic links, and files not in current-account completed records',async t=>{
+ const s=await setup(t);await s.client.processFile(s.input);const record=s.client.records[owner+':'+taskId+':1'];const outside=path.join(s.dir,'outside.png');await writeFile(outside,picture());const original=record.filename;record.filename=outside;assert.equal((await s.client.cleanupCompleted()).kept,1);assert.equal((await readFile(outside)).length,150);
+ const link=path.join(s.options.directory,'linked.png');await symlink(original,link);record.filename=link;assert.equal((await s.client.cleanupCompleted()).kept,1);assert.equal((await readFile(original)).length,150);
+ record.filename=original;record.phase='failed';s.client.records[projectId+':'+taskId+':1']={...record,phase:'complete',filename:outside};assert.equal((await s.client.cleanupCompleted()).total,0);assert.equal((await readFile(outside)).length,150);assert.equal((await readFile(original)).length,150);
+});
+test('pause during cleanup prevents deletion and later explicit cleanup can resume',async t=>{
+ const s=await setup(t);await s.client.processFile(s.input);const fetch=s.client.fetch;s.client.fetch=async(url,opts)=>{const response=await fetch(url,opts);if(new URL(url).pathname.startsWith('/storage/v1/object/'))s.client.paused=true;return response;};const result=await s.client.cleanupCompleted();assert.equal(result.deleted,0);assert.equal(result.kept,1);assert.equal((await readFile(s.input.filename)).length,150);s.client.fetch=fetch;await s.client.setSession('resumed-token');assert.equal((await s.client.cleanupCompleted()).deleted,1);
+});
+test('persistent cloud outage stops bulk cleanup after one bounded retry budget and keeps remaining files',async t=>{
+ const s=await setup(t);await s.client.processFile({...s.input,count:2});s.client.records[owner+':'+taskId+':2']={...s.client.records[owner+':'+taskId+':1'],part:2};let calls=0;s.client.delay=async()=>{};s.client.fetch=async()=>{calls++;return new Response('',{status:503});};const result=await s.client.cleanupCompleted();assert.equal(calls,4);assert.equal(result.deleted,0);assert.equal(result.kept,1);assert.equal(result.remaining,1);assert.equal((await readFile(s.input.filename)).length,150);
 });
 test('upload offset recovery has one retry budget instead of nesting another three HEAD retries',async t=>{
  const s=await setup(t),fetch=s.client.fetch;let heads=0,patches=0;s.client.delay=async()=>{};
