@@ -66,6 +66,7 @@ function render(){
    actions.append(el('div','下一步：'+(r.link_issue==='来源不在当前收藏清单'?'导入包含此作品的收藏清单，或继续在工作台处理':'核对并保存此项目的原作来源链接')));tr.append(actions);body.append(tr);continue;
   }
   const actions=el('td'),buttons=el('div');buttons.className='row';actions.style.minWidth='330px';
+  if(r.source_type==='SUHA')buttons.append(btn(batchIds.has(r.id)?'移出本批':'加入本批',()=>{batchIds.has(r.id)?batchIds.delete(r.id):batchIds.add(r.id);render();}));
   buttons.append(btn('打开作品',()=>{if(!r.source_url)throw Error('特殊来源类型请从收藏夹正常打开，不猜测下载 URL');window.open(r.source_url,'_blank','noopener');}),btn(r.master_count?'打开母图工作台':'上传母图',()=>{window.open(C.importerURL(r),'_blank','noopener');}),btn(r.paused?'继续':'暂停',()=>patch(r,{paused:!r.paused})));
   const select=el('select');for(const s of ['pending','needs_review','downloaded','failed'])select.add(new Option(C.labels[s],s));select.value=r.phase;select.onchange=async()=>{try{let filename=r.download_filename,reason=r.failure_reason;if(select.value==='downloaded'){filename=prompt('填写已实际下载的原图文件名（此状态不代表云端核验）',filename||'');if(!filename?.trim()){render();return;}}if(select.value==='failed'){reason=prompt('记录失败原因',reason||'');if(reason===null){render();return;}}await patch(r,{phase:select.value,download_filename:filename,failure_reason:reason,last_checked_at:new Date().toISOString(),retry_count:r.retry_count+(select.value==='failed'?1:0)});}catch(e){say(e.message);render();}};
   if(!r.master_count)buttons.append(select);
@@ -86,6 +87,7 @@ $('loadObserved').onclick=()=>{
 };
 $('refresh').onclick=loadAll;$('filter').onchange=()=>{page=0;render();};$('search').oninput=()=>{page=0;render();};$('prev').onclick=()=>{page--;render();};$('next').onclick=()=>{page++;render();};
 $('showNew').onclick=()=>{$('filter').value='new';$('search').value='';page=0;render();};
+$('clearBatch').onclick=()=>{batchIds.clear();render();say('已清空批次，可逐幅加入需要验收的作品。');};
 $('nextBatch').onclick=()=>{const visible=new Set(allFiltered().map(r=>r.id));batchIds=new Set(queue.filter(r=>visible.has(r.id)&&!r.paused&&!r.master_count&&['pending','failed'].includes(r.live_status)).slice(0,Number($('batch').value)).map(r=>r.id));page=0;render();say('已从当前筛选选择 '+batchIds.size+' 条待处理作品；已有母图的作品不会再次进入下载批次。');};
 $('export').onclick=()=>exportJSON(queue,'中华珍宝馆_收藏采集队列_云端进度.json');$('exportBatch').onclick=()=>exportJSON(queue.filter(r=>batchIds.has(r.id)),'中华珍宝馆_本批次.json');
 async function refreshAuth(){const {data:{session}}=await db.auth.getSession();const nextUser=session?.user||null;if(user?.id!==nextUser?.id){authEpoch++;queue=[];workspace=[];projectData=[];masterData=[];cropData=[];imports=[];batchIds.clear();newIds.clear();newSelection=false;newLabel='最近清单新增';page=0;$('filter').value='all';say('新收藏清单可继续导入；云端会按来源类型和作品 ID 只追加新增作品。');$('cloudState').textContent='正在加载云端收藏…';render();renderImports();}user=nextUser;$('authState').textContent=user?'已登录：'+user.email:'未登录';$('loginPanel').hidden=!!user;$('workPanel').hidden=!user;$('logout').hidden=!user;subscribe();if(user)await loadAll();else{$('cloudState').textContent='登录后自动加载云端收藏';$('syncState').textContent='';}}

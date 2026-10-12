@@ -1,6 +1,7 @@
 'use strict';
 // v0.7 local automation uses only explicitly started, source-bound download tasks.
-importScripts('automation.js');
+importScripts('acceptance.js','automation.js');
+chrome.runtime.onStartup.addListener(()=>{CaptureAcceptance.browserStarted().catch(()=>{});});
 const IMPORTER='https://zhengjialai7-a11y.github.io/ancient-stove-reference/importer.html';
 const SITE=/^https:\/\/(?:[a-z0-9-]+\.)*ltfc\.net(?:\/|$)/i;
 const WINDOW_MS=3*60*1000;
@@ -22,8 +23,9 @@ async function downloadCreated(item){
  await chrome.action.setBadgeBackgroundColor({color:'#72512f'});
  await chrome.action.setBadgeText({text:'↓'});
 }
-chrome.downloads.onCreated.addListener(item=>{downloadCreated(item).catch(()=>{});});
+chrome.downloads.onCreated.addListener(item=>{CaptureAutomation.onDownloadEvent(item).catch(()=>{});downloadCreated(item).catch(()=>{});});
 chrome.downloads.onChanged.addListener(async delta=>{
+ if(delta.filename||delta.state)CaptureAutomation.onDownloadEvent({id:delta.id}).catch(()=>{});
  try{
   const {download}=await chrome.storage.local.get('download');
   if(!download||download.id!==delta.id)return;
