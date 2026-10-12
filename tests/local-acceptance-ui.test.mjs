@@ -27,7 +27,7 @@ function queueUI(){
 test('page button sends the authenticated validation request through the real bridge and renders/export actual results',async()=>{
  const ui=queueUI();await ui.$('localPrepare').onclick();const done=ui.f.waitForValidation();await ui.$('localValidate').onclick();await done;await new Promise(setImmediate);
  const command=ui.commands.find(m=>m.command==='validate');assert.equal(command.ownerId,'ui-owner');assert.equal(command.accessToken,'ephemeral-ui-session');assert.equal(command.tasks.length,2);
- assert.equal(ui.$('localValidationReport').children.length,6);assert.match(ui.$('localValidationMessage').textContent,/自动验收结束/);assert.equal(ui.$('localValidationResume').hidden,true);assert.equal(ui.$('localValidationExport').disabled,false);
+ assert.equal(ui.$('localValidationReport').children.length,6);assert.match(ui.$('localValidationMessage').textContent,/自动验收结束/);assert.match(ui.$('localValidationMessage').textContent,/验收批次：百鹊图卷、罗汉图/);assert.equal(ui.$('localValidationResume').hidden,true);assert.equal(ui.$('localValidationExport').disabled,false);
  const rows=ui.$('localValidationReport').children.map(e=>e.textContent);assert.ok(rows.some(t=>t.includes('多张母图 · 通过')));assert.ok(rows.some(t=>t.includes('浏览器重启保留 · 待验证')));
  await ui.$('localValidationExport').onclick();assert.equal(ui.exports.length,1);assert.equal(ui.exports[0].report.checks.repeat.status,'passed');assert.equal(JSON.stringify(ui.exports).includes('ephemeral-ui-session'),false);assert.match(ui.exports[0].name,/验收报告.*json$/);
 });
@@ -36,7 +36,7 @@ test('queue ignores a different account validation progress and keeps its own re
 });
 
 test('an old plugin returns an immediate upgrade message instead of timing out on new validation commands',async()=>{
- const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.8.1/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+ const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.8.2/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
 });
 test('an account change clears the visible acceptance report and disables its export',async()=>{
  const ui=queueUI();await ui.$('localPrepare').onclick();const done=ui.f.waitForValidation();await ui.$('localValidate').onclick();await done;await new Promise(setImmediate);assert.equal(ui.$('localValidationReport').children.length,6);ui.authChange('SIGNED_IN',{user:{id:'other-owner'}});assert.equal(ui.$('localValidationReport').children.length,0);assert.equal(ui.$('localValidationExport').disabled,true);

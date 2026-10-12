@@ -1,7 +1,7 @@
 'use strict';
 // Real browser/native acceptance checks. No tokens, signed download URLs or local paths in reports.
 const CaptureAcceptance=(()=>{
- const VERSION='0.8.1',LABELS={pipeline:'下载、上传和关联',multi:'多张母图',skip:'失败跳过与留档',pause:'暂停与恢复',repeat:'重复采集复用',restart:'浏览器重启保留'};
+ const VERSION='0.8.2',LABELS={pipeline:'下载、上传和关联',multi:'多张母图',skip:'失败跳过与留档',pause:'暂停与恢复',repeat:'重复采集复用',restart:'浏览器重启保留'};
  const safeError=value=>String(value||'').replace(/\b[A-Z]:\\[^\r\n']+/gi,'[本机路径]').replace(/https?:\/\/[^\s]+/gi,'[下载或请求地址]').replace(/(?:Bearer\s+|access_token[=:]\s*)\S+/gi,'[登录凭据]');
  const now=()=>new Date().toISOString();
  const summary=task=>({id:task.id,source_id:task.source_id,source:task.source,title:task.title,count:task.count,status:task.status,error:task.error?safeError(task.error):null,failures:(task.failures||[]).map(f=>({time:f.time,stage:f.stage,part:f.part,error:safeError(f.error)})),files:(task.files||[]).map(f=>({part:f.part,complete:!!f.complete,masterId:f.masterId||null,projectId:f.projectId||null}))});
@@ -10,10 +10,11 @@ const CaptureAcceptance=(()=>{
  function canonical(value){if(Array.isArray(value))return value.map(canonical);if(value&&typeof value==='object')return Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])]));return value;}
  const sameData=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
  function differences(task,baseline){if(!task)return ['record'];const current=summary(task),previous={...baseline,files:byPart(baseline.files)};current.files=byPart(current.files);return [...new Set([...Object.keys(current),...Object.keys(previous)])].sort().filter(key=>!sameData(current[key],previous[key]));}
+ function restoreFinalSnapshot(value){const baseline=value.restartBaseline,ids=value.taskIds;if(value.status==='finished'&&Array.isArray(ids)&&Array.isArray(baseline)&&baseline.length===ids.length&&ids.every(id=>baseline.some(t=>t.id===id)))value.tasks=structuredClone(baseline);}
  function create(api){
   let report=null,busy=false,control=0,autoPause=false;
   const sameOwner=()=>report&&api.state().owner===report.owner;
-  async function save(message){if(!sameOwner())throw Error('验收账号已变化');report.updatedAt=now();report.tasks=api.state().tasks.map(summary);const data=await chrome.storage.local.get('localCaptureValidationReports'),all=data.localCaptureValidationReports||[];const index=all.findIndex(r=>r.id===report.id);if(index<0)all.push(structuredClone(report));else all[index]=structuredClone(report);await chrome.storage.local.set({localCaptureValidation:report,localCaptureValidationReports:all});await api.progress({validation:report,...(message?{message}:{})});}
+  async function save(message){if(!sameOwner())throw Error('验收账号已变化');report.updatedAt=now();if(report.status==='finished')restoreFinalSnapshot(report);else report.tasks=api.state().tasks.map(summary);const data=await chrome.storage.local.get('localCaptureValidationReports'),all=data.localCaptureValidationReports||[];const index=all.findIndex(r=>r.id===report.id);if(index<0)all.push(structuredClone(report));else all[index]=structuredClone(report);await chrome.storage.local.set({localCaptureValidation:report,localCaptureValidationReports:all});await api.progress({validation:report,...(message?{message}:{})});}
   function setCheck(name,status,detail,evidence={}){report.checks[name]={label:LABELS[name],status,detail,evidence};}
   async function prepare({resume=false}={}){
    const {owner,tasks}=api.state();if(!owner)throw Error('请先登录');
@@ -76,7 +77,7 @@ const CaptureAcceptance=(()=>{
    }catch(e){report.status=api.state().pauseEpoch!==control?'paused':'blocked';report.error=safeError(e.message);await save('验收'+(report.status==='paused'?'已暂停':'已停止')+'：'+report.error+'；记录已保留');}
    finally{busy=false;}
   }
-  async function status(owner){if(busy&&report?.owner===owner)return structuredClone(report);const data=await chrome.storage.local.get('localCaptureValidation');const saved=data.localCaptureValidation;if(!saved||saved.owner!==owner)return null;report=saved;if(report.status==='running')report={...report,status:'paused',error:'浏览器或插件执行已中断，点击继续验收'};return structuredClone(report);}
+  async function status(owner){if(busy&&report?.owner===owner)return structuredClone(report);const data=await chrome.storage.local.get('localCaptureValidation');const saved=data.localCaptureValidation;if(!saved||saved.owner!==owner)return null;report=saved;restoreFinalSnapshot(report);if(report.status==='running')report={...report,status:'paused',error:'浏览器或插件执行已中断，点击继续验收'};return structuredClone(report);}
   async function checkRestart(owner){
    const data=await chrome.storage.local.get(['localCaptureValidation','localCaptureBrowserBoot','localCaptureHistory']),saved=data.localCaptureValidation;
    if(!saved||saved.owner!==owner)throw Error('没有当前账号的验收报告');if(saved.status!=='finished')throw Error('请先完成自动验收再检查重启保留');report=saved;
