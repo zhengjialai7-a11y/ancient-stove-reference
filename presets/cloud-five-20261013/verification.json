@@ -1,0 +1,50 @@
+{
+  "batch_id": "cloud-five-20261013",
+  "checked_at": "2026-10-13T10:19:13.62545+00:00",
+  "draft_count": 78,
+  "initial_history_count": 78,
+  "field_mismatches": 0,
+  "history_mismatches": 0,
+  "status": "all_written_as_draft",
+  "review_complete": false,
+  "owner_reference_count_before": 19,
+  "owner_reference_count_after": 19,
+  "published_crop_count_before": 27,
+  "published_crop_count_after": 27,
+  "counts": [
+    {
+      "work_title": "乞巧图",
+      "project_id": "579bbff1-e289-4d06-9678-8db43fb7b300",
+      "master_id": "b2e5bc7a-8c80-4b45-85bd-c7c95449441e",
+      "drafts": 21
+    },
+    {
+      "work_title": "太平春市图",
+      "project_id": "fbde18fa-deef-443f-892a-334e105f9c5c",
+      "master_id": "4c96cde1-79d1-455f-9077-a6333cba8a38",
+      "drafts": 18
+    },
+    {
+      "work_title": "春夜宴桃李园图",
+      "project_id": "18fe730e-07b0-41de-8b63-aba99a718a01",
+      "master_id": "e4f2fe75-5180-4e13-ad47-f5c57d1d6540",
+      "drafts": 11
+    },
+    {
+      "work_title": "村童闹学图",
+      "project_id": "affba1b3-c1ff-4c04-8964-9ffe1019652f",
+      "master_id": "abc73819-703c-46b5-a8de-f3b09577cfa5",
+      "drafts": 16
+    },
+    {
+      "work_title": "消夏图",
+      "project_id": "4d9a936e-3cd9-4afe-9874-07195a0112fc",
+      "master_id": "4d742583-d481-40f3-9b5d-853aa6d29328",
+      "drafts": 12
+    }
+  ],
+  "source_verification": "原始云端字节 SHA-256、文件大小、原生宽高全部与母图记录一致。",
+  "verification_scope": "云端数据库整批回读与初始历史逐字段核对；内部裁切预览已逐条查看。",
+  "publication": "none",
+  "baseline_sha256": "15ed89e55d7d179e818162547f639b8399ad62a3bddfe707aa2a312647e74d41"
+}

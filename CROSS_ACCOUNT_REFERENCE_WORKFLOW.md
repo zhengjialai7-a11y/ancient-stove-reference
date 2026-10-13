@@ -1,6 +1,8 @@
 # 美术绘制参考｜跨 GPT 账号可执行 SOP（2026-10-10）
 > **用途**：将此文件链接交给任意设备、任意 GPT 账号。新账号应先阅读全文，核对系统实时状态，然后按流程完成「检索参考 → 获取原始高清图 → 母图无损上云 → AI 裁切草稿 → 用户审校 → 发布 → 学习反馈」。不能将此文档当作已授权访问权限。
 
+当前待审核学习批次：[云端五幅初稿（2026-10-13）](presets/cloud-five-20261013/README.md)。首次方案保存在同目录 `baseline.json`；用户明确确认整幅审核完成后，才能与最终框选、删除/新增及分类对照学习。这五幅可先形成阶段总结，既有每十幅独立古画的正式复盘继续。
+
 ## 0. 系统入口和任务权限
 - 参考图库：https://zhengjialai7-a11y.github.io/ancient-stove-reference/
 - 高清母图上传、草稿编辑与审核：https://zhengjialai7-a11y.github.io/ancient-stove-reference/importer.html
