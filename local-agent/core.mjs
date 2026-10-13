@@ -23,7 +23,7 @@ export function dimensions(b){
 }
 export async function containedFile(root,filename){const base=await realpath(root),file=await realpath(filename);const relative=path.relative(base,file);if(!relative||relative==='..'||relative.startsWith('..'+path.sep)||path.isAbsolute(relative))throw Error('下载文件不在授权目录内');const s=await stat(file);if(!s.isFile()||!s.size||/\.(?:crdownload|part|tmp)$/i.test(file))throw Error('原图尚未下载完成');return {file,size:s.size,mtime:s.mtimeMs,dev:s.dev,ino:s.ino};}
 export class CaptureClient {
- constructor({directory,stateDirectory,fetchImpl=fetch,api=API,storage=STORAGE,event=()=>{},retryDelays=[2000,5000,10000],delay=(ms,signal)=>sleep(ms,undefined,{signal}),requestTimeout=45000,uploadTimeout=120000,idleTimeout=60000}){this.directory=directory;this.stateDirectory=stateDirectory;this.fetch=fetchImpl;this.api=api;this.storage=storage;this.event=event;this.session=null;this.owner=null;this._paused=false;this.activeRequests=new Set();this.pauseController=new AbortController();this.retryDelays=retryDelays;this.delay=delay;this.requestTimeout=requestTimeout;this.uploadTimeout=uploadTimeout;this.idleTimeout=idleTimeout;this.context={};this.records={};this.tus={};this.running=false;}
+ constructor({directory,stateDirectory,fetchImpl=fetch,api=API,storage=STORAGE,event=()=>{},retryDelays=[2000,5000,10000],delay=(ms,signal)=>sleep(ms,undefined,{signal}),requestTimeout=45000,uploadTimeout=120000,idleTimeout=60000}){this.directory=directory;this.stateDirectory=stateDirectory;this.fetch=fetchImpl;this.api=api;this.storage=storage;this.event=event;this.session=null;this.owner=null;this._paused=false;this.activeRequests=new Set();this.pauseController=new AbortController();this.retryDelays=retryDelays;this.delay=delay;this.requestTimeout=requestTimeout;this.uploadTimeout=uploadTimeout;this.idleTimeout=idleTimeout;this.context={};this.records={};this.tus={};this.repairs=[];this.running=false;}
  get paused(){return this._paused;}
  set paused(value){this._paused=!!value;if(value){this.pauseController.abort();for(const controller of this.activeRequests)controller.abort();}else if(this.pauseController.signal.aborted)this.pauseController=new AbortController();}
  pauseError(){return Object.assign(Error('任务已暂停，原文件与进度已保留'),{code:'ART_PAUSED'});}
@@ -39,8 +39,8 @@ export class CaptureClient {
    }
   }
  }
- async load(){await mkdir(this.stateDirectory,{recursive:true});try{const data=JSON.parse(await readFile(path.join(this.stateDirectory,'progress.json'),'utf8'));this.records=data.records||{};this.tus=data.tus||{};}catch(e){if(e.code!=='ENOENT')throw Error('本机进度文件损坏，请保留文件并联系修复');}}
- async save(){const filename=path.join(this.stateDirectory,'progress.json');await writeFile(filename+'.tmp',JSON.stringify({version:1,records:this.records,tus:this.tus},null,2),{mode:0o600});await rename(filename+'.tmp',filename);}
+ async load(){await mkdir(this.stateDirectory,{recursive:true});try{const data=JSON.parse(await readFile(path.join(this.stateDirectory,'progress.json'),'utf8'));this.records=data.records||{};this.tus=data.tus||{};this.repairs=data.repairs||[];}catch(e){if(e.code!=='ENOENT')throw Error('本机进度文件损坏，请保留文件并联系修复');}}
+ async save(){const filename=path.join(this.stateDirectory,'progress.json');await writeFile(filename+'.tmp',JSON.stringify({version:2,records:this.records,tus:this.tus,repairs:this.repairs},null,2),{mode:0o600});await rename(filename+'.tmp',filename);}
  async setSession(accessToken){if(this.running)throw Error('正在上传，不能切换账号');if(typeof accessToken!=='string'||accessToken.length>12000)throw Error('登录凭据无效');this.paused=false;this.context={command:'session'};const res=await this.request(this.api+'/auth/v1/user',{headers:{authorization:'Bearer '+accessToken},stage:'云端登录校验',authorize:false});const account=await res.json();if(!/^[0-9a-f-]{36}$/i.test(account.id||''))throw Error('账号无效');this.owner=account.id;this.session=accessToken;return {owner:this.owner};}
  async refreshSession(accessToken,owner){
   if(!this.owner||owner!==this.owner||typeof accessToken!=='string'||accessToken.length>12000)throw Error('登录凭据更新账号不匹配');if(this.paused)throw this.pauseError();
@@ -65,7 +65,7 @@ export class CaptureClient {
   },{retrySafe});
  }
  async rows(table,query){const r=await this.request(this.api+'/rest/v1/'+table+'?'+new URLSearchParams(query));return r.json();}
- async checkTask(taskId,source){const rows=await this.rows('reference_capture_status',{id:'eq.'+taskId,select:'id,created_by,source_id,source_type,source_url,paused,candidate_count,project_id,resolved_project_id,resolved_master_id'});const t=rows[0];if(!t||t.created_by!==this.owner||sourceKey(source)!==t.source_type+':'+t.source_id)throw Error('任务账号或作品来源不匹配');if(t.paused||this.paused)throw Error('任务已暂停');if((t.candidate_count>1&&!t.project_id)||t.resolved_master_id)throw Error('来源关联需要人工确认');return t;}
+ async checkTask(taskId,source,{review=false}={}){const rows=await this.rows('reference_capture_status',{id:'eq.'+taskId,select:'id,created_by,source_id,source_type,source_url,paused,candidate_count,project_id,resolved_project_id,resolved_master_id'});const t=rows[0];if(!t||t.created_by!==this.owner||sourceKey(source)!==t.source_type+':'+t.source_id)throw Error('任务账号或作品来源不匹配');if(this.paused)throw this.pauseError();if(!review&&t.paused)throw Error('任务已暂停');if(!review&&((t.candidate_count>1&&!t.project_id)||t.resolved_master_id))throw Error('来源关联需要人工确认');return t;}
  async completedParts(input){
   if(this.running)throw Error('本机正在处理另一张原图');if(!Number.isInteger(input.count)||input.count<1||input.count>500)throw Error('母图张数无效');this.running=true;const verification=input.recheck===true?'readback':'receipts';this.context={command:'task',taskId:input.taskId,count:input.count,verification};
   try{const task=await this.checkTask(input.taskId,input.source),rows=await this.rows('reference_capture_files',{task_id:'eq.'+input.taskId,select:'part_index,expected_count,phase,sha256,master_id'});if(rows.some(r=>r.expected_count!==input.count))throw Error('母图总张数与云端已有分段记录不一致');
@@ -133,6 +133,33 @@ export class CaptureClient {
   finally{await handle.close();}delete this.tus[journalKey];await this.save();
  }
  async ledger(taskId,part,count,values,{retrySafe=true}={}){const r=await this.request(this.api+'/rest/v1/reference_capture_files?on_conflict=created_by,task_id,part_index',{method:'POST',retrySafe,headers:{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({created_by:this.owner,task_id:taskId,part_index:part,expected_count:count,updated_at:new Date().toISOString(),...values})});return r;}
+ async reviewPart(input){
+  if(!Number.isInteger(input.part)||input.part<1||input.part>500)throw Error('失败分段无效');
+  await this.checkTask(input.taskId,input.source,{review:true});
+  const row=(await this.rows('reference_capture_files',{created_by:'eq.'+this.owner,task_id:'eq.'+input.taskId,part_index:'eq.'+input.part,select:'id,created_by,task_id,part_index,expected_count,phase,sha256,master_id,error,original_filename,updated_at'}))[0];
+  const duplicates=row?.sha256?await this.rows('reference_capture_files',{created_by:'eq.'+this.owner,task_id:'eq.'+input.taskId,sha256:'eq.'+row.sha256,select:'part_index,phase,original_filename,master_id'}):[];
+  const masters=row?.sha256?await this.rows('artwork_masters',{created_by:'eq.'+this.owner,sha256:'eq.'+row.sha256,select:'id,project_id,original_filename'}):[];
+  return {owner:this.owner,taskId:input.taskId,part:input.part,row:row||null,duplicateParts:duplicates.filter(r=>r.part_index!==input.part),masters};
+ }
+ async resetFailedPart(input){
+  if(this.running)throw Error('本机正在处理原图，请先等待批次结束');if(!this.owner||!this.session)throw Error('请先登录当前账号');this.running=true;this.context={command:'repair',taskId:input.taskId,part:input.part};
+  try{
+   if(!Number.isInteger(input.count)||input.count<1||input.count>500||!Number.isInteger(input.part)||input.part<1||input.part>input.count)throw Error('失败分段或张数无效');
+   await this.checkTask(input.taskId,input.source);const key=this.owner+':'+input.taskId+':'+input.part,local=this.records[key];
+   if(local&&(local.source!==input.source||local.count!==input.count||local.phase==='complete'||local.masterId))throw Error('此分段已有完成记录或来源不一致，不能重置');
+   const info=await this.reviewPart(input),row=info.row;
+   if(row&&(row.created_by!==this.owner||row.task_id!==input.taskId||row.expected_count!==input.count||row.phase!=='failed'||row.master_id))throw Error('云端分段已完成或状态改变，不能重置');
+   if(!row&&!local)return {owner:this.owner,taskId:input.taskId,part:input.part,reset:true};
+   const repair={owner:this.owner,taskId:input.taskId,part:input.part,at:new Date().toISOString(),action:'redownload',local:local?structuredClone(local):null,cloud:row?structuredClone(row):null,status:'prepared'};
+   this.repairs.push(repair);await this.save();
+   if(row){
+    const query=new URLSearchParams({id:'eq.'+row.id,created_by:'eq.'+this.owner,task_id:'eq.'+input.taskId,part_index:'eq.'+input.part,expected_count:'eq.'+input.count,phase:'eq.failed',master_id:'is.null',sha256:row.sha256?'eq.'+row.sha256:'is.null',updated_at:'eq.'+row.updated_at});
+    const response=await this.request(this.api+'/rest/v1/reference_capture_files?'+query,{method:'PATCH',retrySafe:false,headers:{'Content-Type':'application/json',Prefer:'return=representation'},body:JSON.stringify({sha256:null,original_filename:null,error:'已保留原失败记录，等待重新下载：'+String(row.error||'人工核对').slice(0,180),updated_at:new Date().toISOString()})});
+    const changed=await response.json();if(changed.length!==1)throw Error('云端分段状态已改变，未重置；请刷新后核对');
+   }
+   if(this.paused)throw this.pauseError();delete this.records[key];if(local?.hash)delete this.tus[this.owner+':'+local.hash];repair.status='reset';await this.save();return {owner:this.owner,taskId:input.taskId,part:input.part,reset:true};
+  }finally{this.running=false;}
+ }
  async processFile(input){
   if(this.running)throw Error('本机正在处理另一张原图');this.running=true;this.context={command:'file',taskId:input.taskId,part:input.part,count:input.count};
   let record,k;try{
@@ -161,5 +188,5 @@ export class CaptureClient {
   }catch(e){if(record){record.phase=this.paused?'paused':'failed';record.error=e.message;await this.save();if(!this.paused)try{await this.ledger(input.taskId,input.part,input.count,{phase:'failed',sha256:record.hash,error:e.message},{retrySafe:false});}catch{}}throw e;}
   finally{this.running=false;}
  }
- status(){return {version:'0.7.4',directory:this.directory,running:this.running,paused:this.paused,records:this.owner?Object.entries(this.records).filter(([k])=>k.startsWith(this.owner+':')).map(([,r])=>r).slice(-100):[]};}
+ status(){return {version:'0.7.5',directory:this.directory,running:this.running,paused:this.paused,records:this.owner?Object.entries(this.records).filter(([k])=>k.startsWith(this.owner+':')).map(([,r])=>r).slice(-100):[]};}
 }

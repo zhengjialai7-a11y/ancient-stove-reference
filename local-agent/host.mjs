@@ -37,11 +37,13 @@ async function handle(message){
     const {stdout}=await promisify(execFile)('powershell.exe',['-STA','-NoProfile','-Command',script],{windowsHide:false,encoding:'utf8'});
     const directory=stdout.trim();if(!directory)throw Error('未选择下载目录');client.directory=directory;config.directory=directory;await writeFile(configPath,JSON.stringify(config,null,2));result={directory};break;
    }
+   case 'review_part':result=await client.reviewPart(message.file);break;
+   case 'reset_failed_part':result=await client.resetFailedPart(message.file);break;
    case 'file':result=await client.processFile(message.file);break;
    case 'cleanup':result=await client.cleanupCompleted();break;
    default:throw Error('未知助手命令');
   }send({id,ok:true,result});
- }catch(e){send({id,ok:false,error:String(e.message).slice(0,300),errorInfo:{code:e.code,stage:e.stage,status:e.status,retryable:!!e.retryable,retryAttempts:e.retryAttempts||0}});}
+ }catch(e){send({id,ok:false,error:String(e.message).slice(0,300),errorInfo:{code:e.code,stage:e.stage,part:message.file?.part||client.context?.part||null,status:e.status,retryable:!!e.retryable,retryAttempts:e.retryAttempts||0}});}
 }
 process.stdin.on('data',bytes=>{try{for(const message of decoder.push(bytes)){if(!message||typeof message.id!=='string'||message.id.length>80)continue;handle(message);}}catch{process.exit(1);}});
 process.stdin.on('end',()=>{client.paused=true;setTimeout(()=>process.exit(0),500);});

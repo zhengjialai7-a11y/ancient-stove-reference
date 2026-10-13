@@ -58,5 +58,5 @@ test('initial network auth failure saves only the intended work and resumes afte
 });
 test('manual pause cancels the pending alarm and content validation failures do not create a retry job',async()=>{
  const f=flow({recoveryClock:true,nativeError:{command:'file',part:1,info:{code:'ART_NETWORK',retryable:true}}});await f.start(tasks);await f.done;await new Promise(setImmediate);await f.command('pause');assert.equal(f.stored.localCaptureNetworkRetry,null);assert.equal(f.alarms.size,0);f.advance(300000);assert.equal(await f.adapter.retryNetworkDue(),false);
- f.configure({nativeError:{command:'file',part:1,message:'此原图与另一分段完全相同，请核对是否切换到了下一张'}});const stopped=f.waitForFinish();await f.command('resume');await stopped;await new Promise(setImmediate);assert.equal(f.stored.localCaptureNetworkRetry,null);assert.equal(f.stored.localCaptureState.phase,'blocked');
+ f.configure({nativeError:{command:'file',part:1,message:'此原图与另一分段完全相同，请核对是否切换到了下一张'}});const stopped=f.waitForFinish();await f.command('resume');await stopped;await new Promise(setImmediate);assert.equal(f.stored.localCaptureNetworkRetry,null);assert.equal(f.stored.localCaptureState.phase,'finished');assert.equal(f.stored.localCaptureTasks.find(t=>t.id===tasks[0].id).review.kind,'duplicate');
 });

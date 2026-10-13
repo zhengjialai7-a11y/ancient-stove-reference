@@ -1,7 +1,7 @@
 'use strict';
 // Real browser/native acceptance checks. No tokens, signed download URLs or local paths in reports.
 const CaptureAcceptance=(()=>{
- const VERSION='0.9.4',LABELS={pipeline:'下载、上传和关联',multi:'多张母图',skip:'失败跳过与留档',pause:'暂停与恢复',repeat:'重复采集复用',restart:'浏览器重启保留'};
+ const VERSION='0.9.5',LABELS={pipeline:'下载、上传和关联',multi:'多张母图',skip:'失败跳过与留档',pause:'暂停与恢复',repeat:'重复采集复用',restart:'浏览器重启保留'};
  const safeError=value=>String(value||'').replace(/\b[A-Z]:\\[^\r\n']+/gi,'[本机路径]').replace(/https?:\/\/[^\s]+/gi,'[下载或请求地址]').replace(/(?:Bearer\s+|access_token[=:]\s*)\S+/gi,'[登录凭据]');
  const now=()=>new Date().toISOString();
  const summary=task=>({id:task.id,source_id:task.source_id,source:task.source,title:task.title,count:task.count,status:task.status,error:task.error?safeError(task.error):null,failures:(task.failures||[]).map(f=>({time:f.time,stage:f.stage,part:f.part,error:safeError(f.error)})),files:(task.files||[]).map(f=>({part:f.part,complete:!!f.complete,masterId:f.masterId||null,projectId:f.projectId||null}))});
@@ -66,7 +66,7 @@ const CaptureAcceptance=(()=>{
      report.phase='recover';await save('验收：正在恢复测试取消或失败的作品');
     }
     if(report.phase==='recover'){
-     const result=await collect(api.state().tasks.filter(t=>t.status!=='complete'));if(result.paused){report.status='paused';report.error=result.stopReason?safeError(result.stopReason):null;await save('验收已暂停，进度和报告已保存；可点击继续验收');return;}if(result.stopReason)throw result.stopError||Error(result.stopReason);
+     const result=await collect(api.state().tasks.filter(t=>t.status!=='complete'&&(!t.review||t.review.kind==='network'||report.probe.observed&&report.probe.taskId===t.id)));if(result.paused){report.status='paused';report.error=result.stopReason?safeError(result.stopReason):null;await save('验收已暂停，进度和报告已保存；可点击继续验收');return;}if(result.stopReason)throw result.stopError||Error(result.stopReason);
      evaluateCollection();report.phase='repeat';report.repeatBaseline=api.state().tasks.filter(t=>t.status==='complete').map(summary);await save('验收：复跑已完成作品，检查重复下载和上传');
     }
     if(report.phase==='repeat'){

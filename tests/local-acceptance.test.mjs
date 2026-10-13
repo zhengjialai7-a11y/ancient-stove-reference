@@ -25,7 +25,7 @@ test('manual pause during the acceptance checkpoint halts automation until expli
  await new Promise(setImmediate);f.configure({pauseAtCheckpoint:false});const done=f.waitForValidation();assert.equal((await f.command('validation_resume')).ok,true);const resumed=await done;assert.equal(resumed.id,report.id);assert.equal(resumed.status,'finished');assert.equal(resumed.checks.pause.status,'passed');assert.equal(resumed.probe.observed,true);assert.equal(f.events.filter(e=>e[0]==='cancel').length,1);
 });
 test('native upload errors stop acceptance with retained reasons, not an automatic success',async()=>{
- const {report}=await runValidation({nativeError:{command:'file',taskId:tasks[1].id,part:1}});assert.equal(report.status,'blocked');assert.match(report.error,/本机助手连接或云端上传失败/);assert.notEqual(report.checks.pipeline.status,'passed');assert.notEqual(report.checks.repeat.status,'passed');
+ const {report}=await runValidation({nativeError:{command:'file',taskId:tasks[1].id,part:1,info:{code:'ART_AUTH'}}});assert.equal(report.status,'blocked');assert.match(report.error,/本机助手连接或云端上传失败/);assert.notEqual(report.checks.pipeline.status,'passed');assert.notEqual(report.checks.repeat.status,'passed');
 });
 test('the repeat check fails when cloud completion receipts disappear and native upload is invoked again',async()=>{
  const {report}=await runValidation({missingVerified:true});assert.equal(report.checks.repeat.status,'failed');assert.ok(report.checks.repeat.evidence.uploads>0);
@@ -68,7 +68,7 @@ test('ordinary capture cannot replace the active acceptance batch',async()=>{
  const f=flow({acceptance:true}),done=f.waitForValidation();assert.equal((await f.command('validate',{tasks})).ok,true);const start=await f.command('start',{tasks:[tasks[0]]});assert.equal(start.ok,false);assert.match(start.error,/正在运行/);assert.equal((await done).tasks.length,2);
 });
 test('exports redact native error URLs and full Windows paths while retaining the failure stage',async()=>{
- const {report}=await runValidation({nativeError:{command:'file',taskId:tasks[1].id,part:1,message:"错误 https://example.test/object?token=secret C:\\Users\\PrivateName\\Downloads\\原图.jpg"}});assert.equal(report.status,'blocked');const content=JSON.stringify(report);assert.equal(content.includes('PrivateName'),false);assert.equal(content.includes('token=secret'),false);assert.match(report.error,/本机路径/);assert.ok(report.events.some(e=>e.type==='stopped'&&e.stage==='uploading'));
+ const {report}=await runValidation({nativeError:{command:'file',taskId:tasks[1].id,part:1,info:{code:'ART_AUTH'},message:"错误 https://example.test/object?token=secret C:\\Users\\PrivateName\\Downloads\\原图.jpg"}});assert.equal(report.status,'blocked');const content=JSON.stringify(report);assert.equal(content.includes('PrivateName'),false);assert.equal(content.includes('token=secret'),false);assert.match(report.error,/本机路径/);assert.ok(report.events.some(e=>e.type==='stopped'&&e.stage==='uploading'));
 });
 test('resume rejects a changed artwork source before opening a page',async()=>{
  const {f}=await runValidation({pauseAtCheckpoint:true});await new Promise(setImmediate);const saved=structuredClone(f.stored);saved.localCaptureTasks[0].source=tasks[1].source;const restored=flow({acceptance:true,initialStored:saved});const resumed=await restored.command('validation_resume');assert.equal(resumed.ok,false);assert.match(resumed.error,/批次已改变/);assert.equal(restored.events.some(e=>e[0]==='open'),false);

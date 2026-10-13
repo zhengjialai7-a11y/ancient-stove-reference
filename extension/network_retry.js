@@ -11,7 +11,7 @@ const CaptureNetworkRetry=(()=>{
   if(e.code)return false;
   return !/SHA-256|字节数不一致|来源.*不匹配|账号.*不匹配/.test(e.message||'')&&/ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|UND_ERR_SOCKET|fetch failed/i.test(e.message||'');
  }
- const fingerprint=tasks=>JSON.stringify((tasks||[]).map(t=>[t.id,t.source]).sort((a,b)=>a[0].localeCompare(b[0])));
+ const fingerprint=tasks=>JSON.stringify((tasks||[]).map(t=>[t.id,t.source]).sort((a,b)=>String(a[0]||'').localeCompare(String(b[0]||''))));
  const safeError=e=>String(e?.message||e||'网络连接中断').replace(/https?:\/\/\S+/gi,'[请求地址]').replace(/Bearer\s+\S+/gi,'[登录凭据]').slice(0,300);
  function publicState(job){if(!job)return null;return {id:job.id,owner:job.owner,mode:job.mode,phase:job.phase,nextAttemptAt:job.nextAttemptAt,attempt:job.attempt,error:job.error,taskId:job.taskId||null};}
  function create({storage,alarms,publish=async()=>{},requestSession=async()=>{},run,validate=async()=>true,canRun=()=>true,now=()=>Date.now(),uuid=()=>crypto.randomUUID()}){

@@ -1,6 +1,6 @@
 'use strict';
 // v0.7 local automation uses only explicitly started, source-bound download tasks.
-importScripts('network_retry.js','acceptance.js','automation.js');
+importScripts('capture_issues.js','network_retry.js','acceptance.js','automation.js');
 CaptureAutomation.restoreNetworkRetry().catch(()=>{});
 chrome.alarms.onAlarm.addListener(alarm=>{if(alarm.name===CaptureNetworkRetry.ALARM)CaptureAutomation.retryNetworkDue().catch(()=>{});});
 chrome.runtime.onStartup.addListener(()=>{CaptureAcceptance.browserStarted().catch(()=>{});CaptureAutomation.restoreNetworkRetry().catch(()=>{});});

@@ -81,7 +81,7 @@ test('a proof arriving late from a skipped artwork is rejected before opening th
 });
 
 for(const command of ['task','file'])test(`a native ${command} failure stops the batch and leaves the next artwork pending`,async()=>{
- const f=flow({nativeError:{command,taskId:tasks[0].id}});await f.start(tasks);await f.done;
+ const f=flow({nativeError:{command,taskId:tasks[0].id,info:{code:'ART_AUTH'}}});await f.start(tasks);await f.done;
  assert.equal(f.events.filter(e=>e[0]==='open').length,1);
  assert.equal(f.stored.localCaptureTasks[0].status,'failed');assert.equal(f.stored.localCaptureTasks[1].status,'pending');assert.match(f.stored.localCaptureState.message,/已停止.*本机助手/);
  assert.equal(f.events.some(e=>e[0]==='close'),false,'leave the active tab available for a system failure');
