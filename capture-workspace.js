@@ -15,6 +15,16 @@ async function initCaptureTask(){
  if(id){const p=projects.find(p=>p.id===id);if(!p)throw Error('关联项目不存在或没有读取权限');await loadProjects(id);fillProjectMetadata(p);projectSelectionId=id;$("projectDetails").open=false;if(projectMasters.length)await selectMaster(projectMasters[0]);}
  // Legacy extension URLs also reuse a unique source project without matching by title.
  if(!incomingCaptureTask&&!id){const source=CaptureCommon.sourceKey(new URLSearchParams(location.search).get('source_url'));const matches=projects.filter(p=>source&&CaptureCommon.sourceKey(p.source_url)===source);if(matches.length===1){await loadProjects(matches[0].id);fillProjectMetadata(matches[0]);projectSelectionId=matches[0].id;}}
+ const masterId=new URLSearchParams(location.search).get('master_id')||incomingCaptureTask?.resolved_master_id;
+ if(masterId){
+  if(!/^[a-f0-9-]{36}$/i.test(masterId))throw Error('母图 ID 无效');
+  if(incomingCaptureTask?.resolved_master_id&&masterId!==incomingCaptureTask.resolved_master_id)throw Error('母图与当前来源记录不一致');
+  const {data:m,error}=await db.from('artwork_masters').select('*').eq('id',masterId).single();if(error)throw error;
+  if(!m||m.created_by!==user?.id)throw Error('母图不存在或没有读取权限');
+  if(incomingCaptureTask&&CaptureCommon.sourceKey(m.source_url)!==incomingCaptureTask.source_type+':'+incomingCaptureTask.source_id)throw Error('母图来源与当前记录不匹配');
+  if(id&&m.project_id!==id)throw Error('母图与当前项目不一致');
+  await selectMaster(m);
+ }
  if(id&&new URLSearchParams(location.search).get('edit_project')==='1'){setWorkspaceMode('import');$("projectDetails").open=true;}
  await refreshCaptureSummary();
 }

@@ -37,11 +37,12 @@ async function refresh(){
  else if(attempt){diagnosis='网站下载按钮已点击，但没有检测到浏览器下载事件。'+(siteState?.value?.includes('重试')?'网页已显示失败/重试；问题在交付浏览器下载之前。':siteState?.value?.includes('准备')?'网页仍显示“准备下载”；尚不能判定底层 HTTP 原因。':'若页面一直没有响应，请查看网站提示；无法仅凭此记录确定服务器原因。');}
  else diagnosis='先刷新作品页，再点击网站正常下载按钮，然后回来点“刷新诊断”。';
  $('diagnosis').textContent=diagnosis;
- copyText=['采集助手 v0.3.8', '网页监听：'+$('connection').textContent,'网页按钮：'+$('attempt').textContent,'浏览器下载：'+$('download').textContent,'结论：'+diagnosis].join('\n\n');
+ copyText=['采集助手 v0.9.6', '网页监听：'+$('connection').textContent,'网页按钮：'+$('attempt').textContent,'浏览器下载：'+$('download').textContent,'结论：'+diagnosis].join('\n\n');
 }
 function send(cmd){return chrome.runtime.sendMessage({type:cmd});}
 $('refresh').onclick=refresh;
 $('openQueue').onclick=()=>chrome.tabs.create({url:'https://zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html'});
+$('openReview').onclick=()=>chrome.tabs.create({url:'https://zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html#review'});
 $('downloads').onclick=()=>send('openDownloads');
 $('openImporter').onclick=()=>send('openImporter');
 $('clear').onclick=async()=>{await send('clear');await refresh();};

@@ -25,3 +25,15 @@ test('ambiguity prevents auto association and summary reflects linked multipart 
  const s=setup();s.state.task.candidate_count=3;await assert.rejects(s.run('assertCaptureContext()'),/多个古画/);
  s.state.task.candidate_count=1;await s.run('refreshCaptureSummary()');assert.match(s.$('captureSummary').textContent,/母图 2 \/ 已核验 0/);assert.match(s.$('captureSummary').textContent,/草稿 2/);
 });
+test('master deep link opens the exact owned original without modifying its project or crops',async()=>{
+ const s=setup(),m={id:'22222222-2222-2222-2222-222222222222',created_by:'owner',project_id:null,source_url:source};
+ s.ctx.location.search='?master_id='+m.id;s.ctx.fixtureMaster=m;s.ctx.opened=[];s.ctx.selectMaster=async master=>s.ctx.opened.push(master.id);
+ s.ctx.db.from=()=>({select(){return this},eq(){return this},single:async()=>({data:m})});
+ await s.run('initCaptureTask()');assert.deepEqual([...s.ctx.opened],[m.id]);assert.equal(m.project_id,null);
+});
+test('master deep link refuses invalid ids and another owner before opening pixels',async()=>{
+ const s=setup();s.ctx.location.search='?master_id=invalid';await assert.rejects(s.run('initCaptureTask()'),/母图 ID 无效/);
+ const m={id:'22222222-2222-2222-2222-222222222222',created_by:'other',project_id:null,source_url:source};s.ctx.location.search='?master_id='+m.id;
+ s.ctx.selectMaster=async()=>assert.fail('Foreign pixels must not open');s.ctx.db.from=()=>({select(){return this},eq(){return this},single:async()=>({data:m})});
+ await assert.rejects(s.run('initCaptureTask()'),/没有读取权限/);
+});

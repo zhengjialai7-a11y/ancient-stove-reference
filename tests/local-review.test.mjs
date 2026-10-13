@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {flow,tasks} from './local-flow-helper.mjs';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+import {flow,tasks,QUEUE} from './local-flow-helper.mjs';
 
 test('manual review errors at upload or cloud checking are retained and the next artwork finishes',async()=>{
  for(const command of ['task','file'])for(const message of ['此原图与另一分段完全相同，请核对是否切换到了下一张','来源关联需要人工确认','云端回读 SHA-256 或字节数不一致','相同原图已属于其他项目，需要人工确认']){
@@ -28,4 +30,19 @@ test('review notes and deferred state persist per account and do not erase failu
 test('pausing a delayed repair does not restart downloads or overwrite saved file evidence',async()=>{
  let release;const wait=new Promise(r=>release=r),f=flow({nativeWait:{command:'reset_failed_part',promise:wait},nativeError:{command:'file',taskId:tasks[0].id,part:2,message:'人工核对'}});await f.start(tasks);await f.done;await new Promise(setImmediate);const filename=f.stored.localCaptureTasks[0].files.find(f=>f.part===2).filename,clicks=f.events.filter(e=>e[0]==='click-original').length;
  const repairing=f.command('review_redownload',{taskIds:[tasks[0].id],part:2});await new Promise(setImmediate);await f.command('pause');release();assert.equal((await repairing).ok,false);assert.equal(f.events.filter(e=>e[0]==='click-original').length,clicks);assert.equal(f.stored.localCaptureTasks[0].files.find(f=>f.part===2).filename,filename);
+});
+test('a new batch preserves a completed artwork when its count is mistyped and still collects the next artwork',async()=>{
+ const file={part:1,count:1,filename:'C:/Downloads/verified.jpg',complete:true,masterId:'verified-master',projectId:'verified-project',localDeleted:true,cleanup:{status:'deleted'}},completedAt='2026-10-13T10:00:00.000Z',completed={...tasks[0],owner:'test-owner',count:1,status:'complete',files:[file],completedAt,failures:[]},initialStored={localCaptureOwner:'test-owner',localCaptureTasks:[completed],localCaptureHistory:[completed]},f=flow({fileCount:1,instantDownloads:true,initialStored});assert.equal((await f.start([{...tasks[0],count:2},{...tasks[1],count:1}])).ok,true);await f.done;const preserved=f.stored.localCaptureTasks.find(t=>t.id===tasks[0].id);assert.equal(preserved.status,'complete');assert.equal(preserved.count,1);assert.equal(preserved.completedAt,completedAt);assert.deepEqual(preserved.files,[file]);assert.equal(preserved.review.kind,'count');assert.equal(preserved.review.status,'resolved');assert.equal(preserved.failures.at(-1).preservedComplete,true);assert.equal(f.stored.localCaptureTasks.find(t=>t.id===tasks[1].id).status,'complete');assert.equal(f.events.some(e=>e[0]==='open'&&e[1]===tasks[0].source),false);assert.equal(f.events.filter(e=>e[0]==='native'&&e[1]==='file').length,1);
+});
+test('Chrome download network errors have accurate review labels without changing global upload safety',()=>{
+ const context=vm.createContext({});vm.runInContext(readFileSync(new URL('../extension/capture_issues.js',import.meta.url),'utf8')+';globalThis.issues=CaptureIssues;',context);for(const code of ['NETWORK_FAILED','NETWORK_TIMEOUT','NETWORK_DISCONNECTED','NETWORK_SERVER_DOWN','SERVER_FAILED','SERVER_UNREACHABLE']){assert.equal(context.issues.kind({code},'downloading'),'network');assert.equal(context.issues.global({code},'downloading'),false);assert.equal(context.issues.global({code},'uploading'),true);}assert.equal(context.issues.global({code:'ART_AUTH'},'downloading'),true);assert.equal(context.issues.global({code:'ENOSPC'},'uploading'),true);
+});
+test('review deep links accept the exact queue page with query or hash fragments',async()=>{
+ const f=flow();for(const url of [QUEUE+'#review',QUEUE+'?filter=needs_review#review'])assert.equal((await f.adapter.handle({type:'localCaptureCommand',command:'status',ownerId:'test-owner'},{tab:{url},frameId:0})).ok,true);
+});
+test('lookalike paths and foreign origins cannot dispatch collection commands through a review link',async()=>{
+ const f=flow();for(const url of [QUEUE+'/evil#review',QUEUE.replace('/queue.html','/queue.html.evil')+'#review',QUEUE.replace('zhengjialai7-a11y.github.io','evil.example')+'#review','https://user:password@zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html#review']){const result=await f.adapter.handle({type:'localCaptureCommand',command:'hello'},{tab:{url},frameId:0});assert.equal(result.ok,false);assert.match(result.error,/只允许收藏队列/);}assert.equal(f.events.some(e=>e[0]==='native'),false);
+});
+test('review commands are refused from child frames even when their URL is the queue page',async()=>{
+ const f=flow();for(const frameId of [1,undefined])assert.equal((await f.adapter.handle({type:'localCaptureCommand',command:'hello'},{tab:{url:QUEUE+'#review'},frameId})).ok,false);assert.equal(f.events.some(e=>e[0]==='native'),false);
 });

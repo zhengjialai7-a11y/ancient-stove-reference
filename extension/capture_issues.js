@@ -6,7 +6,7 @@ const CaptureIssues=(()=>{
   const code=error?.code||'',message=error?.message||error?.error||'';
   if(code==='ART_AUTH'||[401,403].includes(error?.status)||/登录已失效|登录过期|登录凭据|云端登录校验/.test(message))return 'auth';
   if(['ART_NATIVE_MISSING','ENOSPC','ENOMEM'].includes(code)||/本机进度文件损坏|另一个浏览器正在运行/.test(message))return 'system';
-  if(['ART_NETWORK','ART_NATIVE_LINK','ART_NATIVE_TIMEOUT'].includes(code)||code==='ART_HTTP'&&[408,429,500,502,503,504,520,521,522,523,524].includes(error?.status)||/ECONNRESET|ETIMEDOUT|UND_ERR_SOCKET|fetch failed/.test(message))return 'network';
+  if(['ART_NETWORK','ART_NATIVE_LINK','ART_NATIVE_TIMEOUT','NETWORK_FAILED','NETWORK_TIMEOUT','NETWORK_DISCONNECTED','NETWORK_SERVER_DOWN','SERVER_FAILED','SERVER_UNREACHABLE'].includes(code)||code==='ART_HTTP'&&[408,429,500,502,503,504,520,521,522,523,524].includes(error?.status)||/ECONNRESET|ETIMEDOUT|UND_ERR_SOCKET|fetch failed/.test(message))return 'network';
   if(/重复|另一分段完全相同|相同原图已属于其他项目/.test(message))return 'duplicate';
   if(/来源|关联|其他项目|账号.*不匹配/.test(message))return 'source';
   if(/张数|分段.*改变|不同文件/.test(message))return 'count';
