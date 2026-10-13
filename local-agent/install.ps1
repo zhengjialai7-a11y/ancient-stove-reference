@@ -48,4 +48,4 @@ foreach ($BrowserKey in @('Microsoft\Edge','Google\Chrome')) {
 }
 Write-Host 'Installed. Keep the browser open; you can close the workbench during upload.' -ForegroundColor Green
 Write-Host 'Open the collection queue, sign in, then click Check local assistant.'
-Start-Process 'https://zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html?v=0.9.2'
+Start-Process 'https://zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html?v=0.9.3'
