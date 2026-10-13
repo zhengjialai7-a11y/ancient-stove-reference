@@ -40,7 +40,7 @@ test('queue ignores a different account validation progress and keeps its own re
 });
 
 test('an old plugin returns an immediate upgrade message instead of timing out on new validation commands',async()=>{
- const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.9.6/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+ const ui=queueUI();ui.overrides.status={ok:true,result:{owner:'ui-owner',tasks:[],history:[]}};await ui.$('localValidate').onclick();assert.match(ui.$('localMessage').textContent,/完整更新至 v0.9.7/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
 });
 test('an account change clears the visible acceptance report and disables its export',async()=>{
  const ui=queueUI();await ui.$('localPrepare').onclick();const done=ui.f.waitForValidation();await ui.$('localValidate').onclick();await done;await new Promise(setImmediate);assert.equal(ui.$('localValidationReport').children.length,6);ui.authChange('SIGNED_IN',{user:{id:'other-owner'}});assert.equal(ui.$('localValidationReport').children.length,0);assert.equal(ui.$('localValidationExport').disabled,true);
@@ -55,7 +55,7 @@ test('the single resume action continues the blocked acceptance report rather th
  ui.f.configure({nativeError:null});const resumed=ui.f.waitForValidation();await ui.$('localResume').onclick();const next=await resumed;assert.equal(next.id,report.id);assert.equal(next.status,'finished');assert.equal(ui.commands.filter(m=>m.command==='validation_resume').length,1);assert.equal(ui.commands.some(m=>m.command==='resume'),false);
 });
 test('a selected mode remains selected when status is refreshed and an old helper is blocked before starting',async()=>{
- const ui=queueUI();await ui.$('localPrepare').onclick();ui.$('localMode').value='validation';ui.$('localMode').onchange();await ui.$('localStatus').onclick();assert.equal(ui.$('localMode').value,'validation');assert.equal(ui.$('localStart').textContent,'开始一键验收');ui.overrides.hello={ok:true,result:{version:'0.7.1'}};await ui.$('localStart').onclick();assert.match(ui.$('localMessage').textContent,/更新至 0.7.5/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
+ const ui=queueUI();await ui.$('localPrepare').onclick();ui.$('localMode').value='validation';ui.$('localMode').onchange();await ui.$('localStatus').onclick();assert.equal(ui.$('localMode').value,'validation');assert.equal(ui.$('localStart').textContent,'开始一键验收');ui.overrides.hello={ok:true,result:{version:'0.7.1'}};await ui.$('localStart').onclick();assert.match(ui.$('localMessage').textContent,/更新至 0.7.6/);assert.equal(ui.commands.some(m=>m.command==='validate'),false);
 });
 test('refreshed same-account tokens pass through the bridge once without changing progress or storing credentials',async()=>{
  const ui=queueUI();await ui.f.start([tasks[0]]);await ui.f.done;await new Promise(setImmediate);
@@ -84,7 +84,7 @@ test('cleanup progress remains separate from capture and ignores another account
  ui.window.postMessage({type:'ART_LOCAL_CLEANUP_PROGRESS',state:{owner:'ui-owner',phase:'finished'}},new URL(QUEUE).origin);await new Promise(setImmediate);assert.equal(ui.$('localStart').disabled,false);
 });
 test('an old plugin refuses the cleanup option immediately with its upgrade instruction',async()=>{
- const ui=queueUI();ui.overrides.status={ok:true,result:{version:'0.9.1',owner:'ui-owner',tasks:[],history:[]}};ui.$('localAutoCleanup').checked=true;await ui.$('localAutoCleanup').onchange();assert.match(ui.$('localCleanupStatus').textContent,/v0.9.6/);assert.equal(ui.commands.some(m=>m.command==='cleanup_settings'),false);
+ const ui=queueUI();ui.overrides.status={ok:true,result:{version:'0.9.1',owner:'ui-owner',tasks:[],history:[]}};ui.$('localAutoCleanup').checked=true;await ui.$('localAutoCleanup').onchange();assert.match(ui.$('localCleanupStatus').textContent,/v0.9.7/);assert.equal(ui.commands.some(m=>m.command==='cleanup_settings'),false);
 });
 test('manual cleanup refreshes its own credentials and pauses on account change even without a prior capture batch',async()=>{
  let release;const blocker=new Promise(r=>{release=r;});const ui=queueUI({nativeWait:{command:'cleanup',promise:blocker}});const cleaning=ui.$('localCleanupCompleted').onclick();await new Promise(r=>setTimeout(r,20));assert.ok(ui.f.events.some(e=>e[0]==='native'&&e[1]==='cleanup'));

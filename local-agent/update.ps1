@@ -9,6 +9,6 @@ if (Test-Path $LockPath) {
  $Running = Get-Process -Id $Lock.pid -ErrorAction SilentlyContinue
  if ($Running -and $Running.ProcessName -eq 'node') { throw 'Reload the capture extension to disconnect the helper, then run this update again.' }
 }
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'core.mjs'),(Join-Path $PSScriptRoot 'host.mjs'),(Join-Path $PSScriptRoot 'network.mjs') -Destination $AgentRoot -Force
-Write-Host 'Helper updated to v0.7.5. Download folder, extension ID and saved progress are preserved.' -ForegroundColor Green
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'core.mjs'),(Join-Path $PSScriptRoot 'host.mjs'),(Join-Path $PSScriptRoot 'network.mjs'),(Join-Path $PSScriptRoot 'r2.mjs') -Destination $AgentRoot -Force
+Write-Host 'Helper updated to v0.7.6. Download folder, extension ID and saved progress are preserved.' -ForegroundColor Green
 Write-Host 'Refresh the queue and click Check local assistant. No extension ID entry is needed.'

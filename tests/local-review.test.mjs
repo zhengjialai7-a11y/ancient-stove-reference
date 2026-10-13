@@ -4,6 +4,15 @@ import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
 import {flow,tasks,QUEUE} from './local-flow-helper.mjs';
 
+test('a storage limit is retained for review while the next artwork completes',async()=>{
+ const f=flow({nativeError:{command:'file',taskId:tasks[0].id,part:2,message:'R2 母图服务尚未启用，本地原图已保留',info:{code:'ART_STORAGE_LIMIT'}}});await f.start(tasks);await f.done;await new Promise(setImmediate);
+ const failed=f.stored.localCaptureTasks[0];assert.equal(failed.status,'failed');assert.equal(failed.review.kind,'storage');assert.equal(failed.files.filter(x=>x.complete).length,1);assert.equal(failed.failures.length,1);assert.equal(f.stored.localCaptureTasks[1].status,'complete');assert.equal(f.stored.localCaptureNetworkRetry,null);
+});
+test('HTTP 413 is a storage issue rather than a repeated network retry',()=>{
+ const context=vm.createContext({});vm.runInContext(readFileSync(new URL('../extension/capture_issues.js',import.meta.url),'utf8')+';globalThis.issues=CaptureIssues;',context);
+ assert.equal(context.issues.kind({code:'ART_HTTP',status:413},'uploading'),'storage');assert.equal(context.issues.global({code:'ART_HTTP',status:413},'uploading'),false);
+});
+
 test('manual review errors at upload or cloud checking are retained and the next artwork finishes',async()=>{
  for(const command of ['task','file'])for(const message of ['此原图与另一分段完全相同，请核对是否切换到了下一张','来源关联需要人工确认','云端回读 SHA-256 或字节数不一致','相同原图已属于其他项目，需要人工确认']){
   const f=flow({nativeError:{command,taskId:tasks[0].id,message}});await f.start(tasks);await f.done;await new Promise(setImmediate);assert.equal(f.stored.localCaptureTasks[0].status,'failed');assert.equal(f.stored.localCaptureTasks[0].failures.length,1);assert.equal(f.stored.localCaptureTasks[0].review.status,'pending');assert.equal(f.stored.localCaptureTasks[1].status,'complete');assert.equal(f.stored.localCaptureState.phase,'finished');assert.equal(f.stored.localCaptureNetworkRetry,null);assert.equal(f.tabs.size,0);

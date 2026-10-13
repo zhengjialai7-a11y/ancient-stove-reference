@@ -36,7 +36,7 @@ test('all scripts compile, and import/batch/reuse paths persist only verified re
  for(const name of ['queue.js','capture-workspace.js','extension/sync_bridge.js'])new vm.Script(readFileSync(new URL('../'+name,import.meta.url),'utf8'));
  assert.equal((app.match(/verified_sha256:hash/g)||[]).length,2);
  assert.match(app,/await assertCaptureMaster\(old\);await verifyRemoteOriginal\(selectedFile/);
- assert.match(app,/await verifyRemoteOriginal\(file,old.storage_path,hash\);await markMasterVerified/);
+ assert.match(app,/await verifyRemoteOriginal\(file,old,hash\);await markMasterVerified/);
  assert.match(app,/await assertCaptureContext\(\);const file=it.file/);
 });
 test('legacy bridge only releases allowlisted collection fields to the project queue',async()=>{

@@ -34,9 +34,9 @@ export async function windowsProxyRoutes(origins){
 export function createCloudTransport({origins,env=process.env,platform=process.platform,resolveRoutes=windowsProxyRoutes,requestImpl=https.request,Agent=https.Agent}={}){
  const allowed=new Set(origins);let agents=new Map(),modes=new Map(),ready=null;
  async function refresh(){
-  const routes=platform==='win32'&&!(env.https_proxy||env.HTTPS_PROXY)?await resolveRoutes(origins):origins.map(origin=>({origin,proxy:null}));
+  const currentOrigins=[...allowed],routes=platform==='win32'&&!(env.https_proxy||env.HTTPS_PROXY)?await resolveRoutes(currentOrigins):currentOrigins.map(origin=>({origin,proxy:null}));
   const next=new Map(),nextModes=new Map();
-  for(const origin of origins){const route=routes.find(r=>r.origin===origin);if(!route)throw Error('Windows 代理解析结果缺少云端域名');const {proxyEnv,mode}=selectProxyEnvironment({env,route});next.set(origin,new Agent({keepAlive:true,maxSockets:2,proxyEnv}));nextModes.set(origin,mode);}
+  for(const origin of currentOrigins){const route=routes.find(r=>r.origin===origin);if(!route)throw Error('Windows 代理解析结果缺少云端域名');const {proxyEnv,mode}=selectProxyEnvironment({env,route});next.set(origin,new Agent({keepAlive:true,maxSockets:2,proxyEnv}));nextModes.set(origin,mode);}
   for(const agent of agents.values())agent.destroy();agents=next;modes=nextModes;
  }
  const initialize=()=>ready||(ready=refresh().catch(e=>{ready=null;throw e;}));
@@ -53,5 +53,8 @@ export function createCloudTransport({origins,env=process.env,platform=process.p
    });req.on('error',reject);req.end(options.body);
   });
  }
- return {fetch:cloudFetch,async refresh(){await (ready=refresh().catch(e=>{ready=null;throw e;}));},mode(origin){return modes.get(origin)||'unknown';},close(){for(const agent of agents.values())agent.destroy();}};
+ return {fetch:cloudFetch,
+  // Called only after the authenticated project RPC approves a storage origin.
+  async allowOrigin(origin){const value=new URL(origin);if(value.protocol!=='https:'||value.origin!==origin||value.username||value.password)throw Error('母图服务地址无效');if(allowed.has(origin))return;await initialize();const routes=platform==='win32'&&!(env.https_proxy||env.HTTPS_PROXY)?await resolveRoutes([origin]):[{origin,proxy:null}],route=routes.find(r=>r.origin===origin);if(!route)throw Error('Windows 代理解析结果缺少母图域名');const {proxyEnv,mode}=selectProxyEnvironment({env,route}),agent=new Agent({keepAlive:true,maxSockets:2,proxyEnv});if(allowed.has(origin)){agent.destroy();return;}allowed.add(origin);agents.set(origin,agent);modes.set(origin,mode);},
+  async refresh(){await (ready=refresh().catch(e=>{ready=null;throw e;}));},mode(origin){return modes.get(origin)||'unknown';},close(){for(const agent of agents.values())agent.destroy();}};
 }

@@ -3,6 +3,11 @@ const $=id=>document.getElementById(id),C=CaptureCommon;
 const db=supabase.createClient('https://otaokoencpoanxjjuqzv.supabase.co','sb_publishable_hA9UHbP834axMbvdRRbwyA_4dUTU2-B');
 let user=null,queue=[],workspace=[],projectData=[],masterData=[],cropData=[],imports=[],newIds=new Set(),newLabel='最近清单新增',newSelection=false,page=0,batchIds=new Set(),channel=null,refreshTimer=null,loading=false,rerun=false,authEpoch=0,importing=false;
 const PAGE_SIZE=35,say=t=>$('msg').textContent=t;
+async function refreshOriginalStorage(epoch=authEpoch){
+ const node=$('originalStorageState');if(!node||!user)return;
+ try{const {data,error}=await db.rpc('get_original_storage_config');if(epoch!==authEpoch)return;if(error)throw error;node.textContent=data?.enabled&&data?.provider==='r2'?'新母图存储：R2 · 已接入':'新母图存储：Supabase · R2 待连接（大文件暂不上传）';}
+ catch(e){if(epoch===authEpoch)node.textContent='母图存储配置未确认：'+String(e.message||e).slice(0,120);}
+}
 function el(tag,text){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n;}
 function btn(label,fn){const b=el('button',label);b.onclick=()=>Promise.resolve().then(fn).catch(e=>say(e.message));return b;}
 async function loadAll(){
@@ -11,7 +16,7 @@ async function loadAll(){
  const snapshot=await Promise.all([readTable('artwork_projects','id,title,author,era,source_url'),readTable('artwork_masters','id,project_id,original_filename,original_width,original_height,original_bytes,sha256,verified_sha256,verified_at'),readTable('artwork_crops','id,master_id,status'),readImports()]);
  if(epoch!==authEpoch)return;queue=all;[projectData,masterData,cropData,imports]=snapshot;workspace=C.workspaceRows(queue,projectData,masterData,cropData);
  if(!newSelection)newIds=new Set(imports[0]?.new_task_ids||[]);
- render();renderImports();$('cloudState').textContent='已自动加载云端 '+queue.length+' 条收藏；下次登录无需重新提交 JSON。';$('syncState').textContent='已同步 '+new Date().toLocaleTimeString('zh-CN');window.dispatchEvent?.(new Event('art-capture-queue-updated'));return true;
+ render();renderImports();refreshOriginalStorage(epoch);$('cloudState').textContent='已自动加载云端 '+queue.length+' 条收藏；下次登录无需重新提交 JSON。';$('syncState').textContent='已同步 '+new Date().toLocaleTimeString('zh-CN');window.dispatchEvent?.(new Event('art-capture-queue-updated'));return true;
  }catch(e){if(epoch===authEpoch)$('syncState').textContent='同步失败，当前数据可能过期：'+e.message;}
  finally{loading=false;if(rerun){rerun=false;scheduleRefresh();}}
 }

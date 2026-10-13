@@ -7,6 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="capture-common.js?v=0.6.0"></script>
+<script src="original-storage.js?v=0.9.7"></script>
 <style>
 :root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#282620;--sub:#766f64;--line:#ded8cc;--accent:#6f4c2f;--green:#316f57}
 *{box-sizing:border-box}
@@ -217,6 +218,8 @@ const PROJECT="otaokoencpoanxjjuqzv", BUCKET="art-reference-images";
 const BASE="https://"+PROJECT+".supabase.co";
 const KEY="sb_publishable_hA9UHbP834axMbvdRRbwyA_4dUTU2-B";
 const db=window.supabase.createClient(BASE,KEY);
+const originalStorage=new OriginalStorage({db,bucket:BUCKET,onProgress:(sent,total)=>{$("uploadProgress").value=Math.round(sent/total*100);}});
+const uploadedOriginals=new WeakMap();
 const $=id=>document.getElementById(id);
 const btoaSafe=s=>String(s||"").replace(/[<>&"']/g,"");
 let user=null, master=null, masterImg=null, selectedFile=null, fileObjectURL=null, projects=[], projectMasters=[];
@@ -569,19 +572,21 @@ $("stage").addEventListener("pointercancel",()=>{dragStart=null;});
 $("fullRect").onclick=()=>{setRectangle({x:0,y:0,w:sourceWidth,h:sourceHeight});autoSaveCropRange().catch(()=>{});};
 function safeName(t){return String(t||"局部参考").replace(/[\\/:*?"<>|]/g,"_").slice(0,90);}
 $("downloadCrop").onclick=async()=>{try{if(!checkRect())throw Error("请先框选有效裁切范围");const r=rectangle;if(r.w*r.h>80000000)throw Error("范围过大，浏览器无法安全导出；请缩小裁切");const canvas=document.createElement("canvas");canvas.width=r.w;canvas.height=r.h;const ctx=canvas.getContext("2d",{alpha:false});if(!ctx)throw Error("浏览器无法创建画布");ctx.imageSmoothingEnabled=false;ctx.drawImage(masterImg,r.x,r.y,r.w,r.h,0,0,r.w,r.h);const blob=await new Promise(ok=>canvas.toBlob(ok,"image/png"));if(!blob)throw Error("浏览器 PNG 编码失败");const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=safeName($("cropTitle").value||master?.title||"高清局部")+".png";a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);message("已导出 "+r.w+" × "+r.h+" 原生像素 PNG；母图保持不变。","ok");}catch(e){message(e.message,"err");}};
-function storageUrl(path){return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;}
+async function storageUrl(m){return originalStorage.publicUrl(m);}
 async function sha256(file){const buffer=await file.arrayBuffer(),hash=await crypto.subtle.digest("SHA-256",buffer);return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");}
-async function uploadBytes(file,path){if(file.size<=6*1024*1024){const {error}=await db.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:file.type,cacheControl:"31536000"});if(error)throw error;$("uploadProgress").value=100;return;}
+async function uploadBytes(file,path,hash,mime=file.type,target){
+target=target||await originalStorage.target(file.size,path);
+if(target.storage_provider==="r2"){await originalStorage.upload(file,target,hash,mime);uploadedOriginals.set(target,{file,hash});return target;}
+if(file.size<=6*1024*1024){const {error}=await db.storage.from(BUCKET).upload(path,file,{upsert:false,contentType:mime,cacheControl:"31536000"});if(error)throw error;$("uploadProgress").value=100;return target;}
 if(!window.tus?.Upload)throw Error("断点续传组件尚未加载，无法保证大文件传输");
 const {data:{session},error:sessionError}=await db.auth.getSession();if(sessionError||!session?.access_token)throw Error("登录已过期，请重新登录");
-await new Promise((resolve,reject)=>{const u=new tus.Upload(file,{endpoint:"https://"+PROJECT+".storage.supabase.co/storage/v1/upload/resumable",headers:{authorization:"Bearer "+session.access_token,"x-upsert":"false"},retryDelays:[0,3000,5000,10000,20000],chunkSize:6*1024*1024,uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,metadata:{bucketName:BUCKET,objectName:path,contentType:file.type,cacheControl:"31536000"},onError:reject,onProgress:(sent,total)=>{$("uploadProgress").value=Math.round(sent/total*100);},onSuccess:resolve});u.findPreviousUploads().then(prev=>{if(prev.length)u.resumeFromPreviousUpload(prev[0]);u.start();}).catch(reject);});}
-async function verifyRemoteOriginal(file,path,expectedHash){
- const {data,error}=await db.storage.from(BUCKET).download(path);
- if(error||!data)throw Error("云端回读失败："+(error?.message||"未获得文件"));
- if(data.size!==file.size)throw Error("原图上传前后字节数不一致");
- const remoteHash=await sha256(data);
- if(remoteHash!==expectedHash)throw Error("云端文件 SHA-256 与本地原图不一致，禁止登记");
- return remoteHash;
+await new Promise((resolve,reject)=>{const u=new tus.Upload(file,{endpoint:"https://"+PROJECT+".storage.supabase.co/storage/v1/upload/resumable",headers:{authorization:"Bearer "+session.access_token,"x-upsert":"false"},retryDelays:[0,3000,5000,10000,20000],chunkSize:6*1024*1024,uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,metadata:{bucketName:BUCKET,objectName:path,contentType:mime,cacheControl:"31536000"},onError:reject,onProgress:(sent,total)=>{$("uploadProgress").value=Math.round(sent/total*100);},onSuccess:resolve});u.findPreviousUploads().then(prev=>{if(prev.length)u.resumeFromPreviousUpload(prev[0]);u.start();}).catch(reject);});return target;}
+async function verifyRemoteOriginal(file,item,expectedHash){
+ const proof=uploadedOriginals.get(item);
+ if(proof?.file===file&&proof.hash===expectedHash)return expectedHash;
+ await originalStorage.verify(file,item,expectedHash);
+ if(item.storage_provider==="r2")await originalStorage.receipt(item,{sha256:expectedHash,bytes:file.size,mime:item.mime_type||file.type});
+ return expectedHash;
 }
 async function loadProjects(selectedId=""){
  const {data,error}=await db.from("artwork_projects").select("*").order("created_at",{ascending:false}).limit(500);
@@ -649,19 +654,22 @@ async function resolveArtworkProject(){
 async function fetchMasters(selectId){const {data,error}=await db.from("artwork_masters").select("*").order("created_at",{ascending:false}).limit(150);if(error)throw error;const box=$("masterList"),selected=selectId||box.value;box.replaceChildren(new Option("选择之前上传的母图",""));for(const m of data||[])box.add(new Option(m.title+" ("+m.original_width+"×"+m.original_height+")",m.id));if(selected&&data?.some(m=>m.id===selected))box.value=selected;return data||[];}
 $("upload").onclick=async()=>{if(busy||multiRunning||navigationRunning)return;setBusy(true);message("正在准备上传及验证高清母图…");try{await flushCropEdits();if(!user)throw Error("请先登录");if(!selectedFile)throw Error("请选择高清原图");assertFileArtwork(selectedFile);await assertCaptureContext();const title=$("workTitle").value.trim();if(!title)throw Error("填写原作名称");const hash=await sha256(selectedFile);message("SHA-256 已计算，正在核查重复文件与上传…");
 const {data:old,error:lookupError}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupError)throw lookupError;
-if(old){if($("projectSelect").value&&old.project_id!==$("projectSelect").value)throw Error("相同母图已属于其他项目，请先核对来源与所属项目");message("发现相同母图，正在回读云端原文件校验 SHA-256…");await assertCaptureMaster(old);await verifyRemoteOriginal(selectedFile,old.storage_path,hash);await markMasterVerified(old,hash);await fetchMasters(old.id);await selectMaster(old,true);message("无损校验通过：本地与云端 SHA-256 完全一致，已复用母图。","ok");return;}
+if(old){if($("projectSelect").value&&old.project_id!==$("projectSelect").value)throw Error("相同母图已属于其他项目，请先核对来源与所属项目");message("发现相同母图，正在回读云端原文件校验 SHA-256…");await assertCaptureMaster(old);await verifyRemoteOriginal(selectedFile,old,hash);await markMasterVerified(old,hash);await fetchMasters(old.id);await selectMaster(old,true);message("无损校验通过：本地与云端 SHA-256 完全一致，已复用母图。","ok");return;}
 const ext=selectedFile.type==="image/png"?"png":selectedFile.type==="image/webp"?"webp":"jpg";
 const path="masters/"+user.id+"/"+hash+"."+ext;
+const storage=await originalStorage.target(selectedFile.size,path);
 $("uploadProgress").hidden=false;$("uploadProgress").style.display="block";$("uploadProgress").value=0;
-try{await uploadBytes(selectedFile,path);}catch(e){try{await verifyRemoteOriginal(selectedFile,path,hash);}catch(_){throw e;}}
+try{await uploadBytes(selectedFile,path,hash,selectedFile.type,storage);}catch(e){if(storage.storage_provider!=="supabase")throw e;try{await verifyRemoteOriginal(selectedFile,storage,hash);}catch(_){throw e;}}
+if(storage.storage_provider==="supabase"){
 const folder="masters/"+user.id;
 const {data:stored,error:verifyError}=await db.storage.from(BUCKET).list(folder,{limit:100,search:hash+"."+ext});if(verifyError)throw verifyError;
 const matched=stored?.find(s=>s.name===hash+"."+ext);if(!matched)throw Error("上传已返回成功，但云端对象未查询到；请刷新后核对，暂不发布");
 const size=Number(matched.metadata?.size??matched.metadata?.contentLength??0);
 if(size&&size!==selectedFile.size)throw Error("云端对象大小与原始文件不一致，禁止入库");
+}
 message("文件已上传，正在回读云端整张原图并核对 SHA-256…");
-await verifyRemoteOriginal(selectedFile,path,hash);
-const project_id=await resolveArtworkProject();const part_index=Math.max(0,...projectMasters.map(m=>Number(m.part_index)||0))+1;const payload={project_id,part_index,part_label:$("partLabel").value.trim()||null,title,author:$("author").value.trim()||null,era:$("era").value.trim()||null,source_url:$("sourceUrl").value.trim()||null,original_filename:selectedFile.name,mime_type:selectedFile.type,original_width:sourceWidth,original_height:sourceHeight,original_bytes:selectedFile.size,sha256:hash,storage_path:path,verified_sha256:hash,verified_at:new Date().toISOString(),created_by:user.id};
+await verifyRemoteOriginal(selectedFile,storage,hash);
+const project_id=await resolveArtworkProject();const part_index=Math.max(0,...projectMasters.map(m=>Number(m.part_index)||0))+1;const payload={project_id,part_index,part_label:$("partLabel").value.trim()||null,title,author:$("author").value.trim()||null,era:$("era").value.trim()||null,source_url:$("sourceUrl").value.trim()||null,original_filename:selectedFile.name,mime_type:selectedFile.type,original_width:sourceWidth,original_height:sourceHeight,original_bytes:selectedFile.size,sha256:hash,...storage,verified_sha256:hash,verified_at:new Date().toISOString(),created_by:user.id};
 const {data:saved,error:saveError}=await db.from("artwork_masters").insert(payload).select("*").single();if(saveError)throw saveError;
 await fetchMasters(saved.id);await selectMaster(saved,true);await loadProjects(saved.project_id);$("partLabel").value="";
 message("无损校验通过：上传前后 SHA-256 完全一致；"+saved.original_width+" × "+saved.original_height+" 原生像素，原始字节未改变。可以开始裁切。","ok");
@@ -722,21 +730,24 @@ async function uploadMultiItem(it,project,index){
  const {data:old,error:lookupErr}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(lookupErr)throw lookupErr;
  if(old){
   if(old.project_id!==project.id)throw Error("相同原图已属于其他项目，请人工确认");
-  await assertCaptureMaster(old);await verifyRemoteOriginal(file,old.storage_path,hash);await markMasterVerified(old,hash);return old;
+  await assertCaptureMaster(old);await verifyRemoteOriginal(file,old,hash);await markMasterVerified(old,hash);return old;
  }
  const [w,height]=it.width?[it.width,it.height]:await multiDimensions(file);
  const ext=/\.png$/i.test(file.name)?"png":/\.webp$/i.test(file.name)?"webp":"jpg";
  const mime=ext==="png"?"image/png":ext==="webp"?"image/webp":"image/jpeg";
  const path="masters/"+user.id+"/"+hash+"."+ext;
+ const storage=await originalStorage.target(file.size,path);
  it.status="上传中";drawMultiQueue();$("uploadProgress").style.display="block";$("uploadProgress").value=0;
- try{await uploadBytes(file,path);}catch(e){try{await verifyRemoteOriginal(file,path,hash);}catch(_){throw e;}}
+ try{await uploadBytes(file,path,hash,mime,storage);}catch(e){if(storage.storage_provider!=="supabase")throw e;try{await verifyRemoteOriginal(file,storage,hash);}catch(_){throw e;}}
+ if(storage.storage_provider==="supabase"){
  const folder="masters/"+user.id,{data:files,error:storageErr}=await db.storage.from(BUCKET).list(folder,{limit:100,search:hash+"."+ext});
  if(storageErr)throw storageErr;const match=files?.find(x=>x.name===hash+"."+ext);if(!match)throw Error("云端对象未找到");
  const size=Number(match.metadata?.size??match.metadata?.contentLength??0);if(size&&size!==file.size)throw Error("云端字节数不符");
- it.status="云端回读校验中";drawMultiQueue();await verifyRemoteOriginal(file,path,hash);
+ }
+ it.status="云端回读校验中";drawMultiQueue();await verifyRemoteOriginal(file,storage,hash);
  const {data:again,error:againErr}=await db.from("artwork_masters").select("*").eq("sha256",hash).maybeSingle();if(againErr)throw againErr;
  if(again){if(again.project_id!==project.id)throw Error("原图已关联其他项目");await markMasterVerified(again,hash);return again;}
- const payload={created_by:user.id,project_id:project.id,part_index:index,part_label:it.label||null,title:project.title,author:project.author||null,era:project.era||null,source_url:project.source_url||null,original_filename:file.name,mime_type:mime,original_width:w,original_height:height,original_bytes:file.size,sha256:hash,storage_path:path,verified_sha256:hash,verified_at:new Date().toISOString()};
+ const payload={created_by:user.id,project_id:project.id,part_index:index,part_label:it.label||null,title:project.title,author:project.author||null,era:project.era||null,source_url:project.source_url||null,original_filename:file.name,mime_type:mime,original_width:w,original_height:height,original_bytes:file.size,sha256:hash,...storage,verified_sha256:hash,verified_at:new Date().toISOString()};
  const {data:saved,error:saveErr}=await db.from("artwork_masters").insert(payload).select("*").single();if(saveErr)throw saveErr;return saved;
 }
 $("batchGo").onclick=async()=>{
@@ -770,7 +781,7 @@ async function selectMaster(m,internal=false){
  navigationRunning=true;updateWorkspaceControls();
  try{
  await flushCropEdits();
- selectedCrop=null;viewedCropStatus=null;setRectangle(null);const url=storageUrl(m.storage_path);if(!(selectedFile&&fileObjectURL&&sourceWidth===m.original_width&&sourceHeight===m.original_height)){await setImageUrl(url);}else{const localHash=await sha256(selectedFile);if(localHash!==m.sha256)await setImageUrl(url);}
+ selectedCrop=null;viewedCropStatus=null;setRectangle(null);const url=await storageUrl(m);if(!(selectedFile&&fileObjectURL&&sourceWidth===m.original_width&&sourceHeight===m.original_height)){await setImageUrl(url);}else{const localHash=await sha256(selectedFile);if(localHash!==m.sha256)await setImageUrl(url);}
 if(sourceWidth!==m.original_width||sourceHeight!==m.original_height)throw Error("云端母图分辨率不符合登记数据");
 master=m;
 $("workTitle").value=m.title;$("author").value=m.author||"";$("era").value=m.era||"";$("sourceUrl").value=m.source_url||"";
@@ -887,6 +898,6 @@ $("logout").onclick=async()=>{await db.auth.signOut();location.reload();};
 window.addEventListener("resize",()=>{if(masterImg)applyZoom();});
 
 </script>
-<script src="capture-workspace.js?v=0.9.6"></script>
+<script src="capture-workspace.js?v=0.9.7"></script>
 </body></html>
 

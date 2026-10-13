@@ -69,7 +69,7 @@ function startCaptureSync(){
 }
 $('verifyStoredMaster').onclick=async()=>{
  if(!master||busy||multiRunning||navigationRunning)return;const m=master;setBusy(true);
- try{message('正在回读已登记母图，核对字节数和 SHA-256…');const {data,error}=await db.storage.from(BUCKET).download(m.storage_path);if(error)throw error;if(data.size!==Number(m.original_bytes))throw Error('云端字节数与登记值不一致');const hash=await sha256(data);if(hash!==m.sha256)throw Error('云端 SHA-256 与登记原图不一致，不能标记核验通过');await markMasterVerified(m,hash);await refreshCaptureSummary();message('回读核验通过：云端文件字节数及 SHA-256 与登记原图一致，收藏队列状态已更新。','ok');}
+ try{message('正在回读已登记母图，核对字节数和 SHA-256…');const data=await originalStorage.download(m);if(data.size!==Number(m.original_bytes))throw Error('云端字节数与登记值不一致');const hash=await sha256(data);if(hash!==m.sha256)throw Error('云端 SHA-256 与登记原图不一致，不能标记核验通过');if(m.storage_provider==='r2')await originalStorage.receipt(m,{sha256:hash,bytes:data.size,mime:m.mime_type});await markMasterVerified(m,hash);await refreshCaptureSummary();message('回读核验通过：云端文件字节数及 SHA-256 与登记原图一致，收藏队列状态已更新。','ok');}
  catch(e){message('回读核验失败：'+e.message,'err');}finally{setBusy(false);}
 };
 window.addEventListener('focus',scheduleCaptureRefresh);setInterval(()=>{if(user&&!document.hidden)scheduleCaptureRefresh();},15000);

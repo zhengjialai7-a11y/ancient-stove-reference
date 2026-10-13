@@ -11,7 +11,8 @@ function setup({corrupt=false,paused=false,existing=false}={}){
  const file=new File([new Uint8Array([1,2,3,4])],'part.jpg',{type:'image/jpeg'}),events=[],writes=[];
  const ctx=vm.createContext({Date,Error,user:{id:'owner'},BUCKET:'images',sha256,drawMultiQueue:()=>{},$:()=>({style:{},value:0}),
   assertCaptureContext:async()=>{events.push('guard');if(paused)throw Error('paused');},assertCaptureMaster:async()=>{},
-  markMasterVerified:async()=>events.push('reuse-receipt'),uploadBytes:async()=>events.push('upload'),
+  markMasterVerified:async()=>events.push('reuse-receipt'),uploadBytes:async()=>events.push('upload'),uploadedOriginals:new WeakMap(),
+  originalStorage:{target:async(_,path)=>({storage_provider:'supabase',storage_origin:null,storage_path:path}),verify:async(local,_,hash)=>{events.push('readback');const remote=corrupt?new Blob([new Uint8Array([5,6,7,8])]):file;if(remote.size!==local.size)throw Error('字节数不符');if(await sha256(remote)!==hash)throw Error('SHA-256 不符');}},
   db:{storage:{from:()=>({list:async()=>({data:[{name:await sha256(file)+'.jpg',metadata:{size:file.size}}]}),download:async()=>{events.push('readback');return {data:corrupt?new Blob([new Uint8Array([5,6,7,8])]):file}}})},from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:existing?{id:'old',project_id:'project',storage_path:'existing'}:null})})}),insert:payload=>{events.push('insert');writes.push(payload);return {select:()=>({single:async()=>({data:{id:'new',...payload}})})}}})}});
  vm.runInContext(readFileSync(new URL('../capture-common.js',import.meta.url),'utf8'),ctx);
  vm.runInContext(html.slice(html.indexOf('function assertFileArtwork('),html.indexOf('async function loadFile('))+'\n'+verify+'\n'+upload,ctx);ctx.item={file,width:100,height:80};ctx.project={id:'project',title:'fixture',source_url:'https://g2.ltfc.net/view/SUHA/608a619faa7c385c8d943087'};

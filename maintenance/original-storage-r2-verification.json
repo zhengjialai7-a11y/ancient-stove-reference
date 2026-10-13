@@ -1,0 +1,57 @@
+{
+  "version": "0.9.7",
+  "nativeVersion": "0.7.6",
+  "verifiedAt": "2026-10-13T14:39:22.510Z",
+  "javascriptTests": {
+    "total": 277,
+    "passed": 277,
+    "failed": 0,
+    "skipped": 0
+  },
+  "database": {
+    "migration": "original_storage_r2_compatibility",
+    "applied": true,
+    "r2Enabled": false,
+    "endpointConfigured": false,
+    "rollbackTests": "passed: HMAC, owner, origin, expiry, path, metadata types, >50 MiB registration, native crop publication, legacy caller compatibility, owner RLS",
+    "oldMothers": {
+      "count": 389,
+      "fingerprint": "c5fc41f594e2e58206a27e7da6c2d4da",
+      "unchanged": true
+    },
+    "oldCrops": {
+      "count": 109,
+      "fingerprint": "e7a160edbf98a658731c467c6beb2903",
+      "unchanged": true
+    },
+    "captureProgress": "No existing capture data updated by migration. Rollback test confirms existing part identities, counts, hashes, phases and linked mother IDs are preserved. Active capture continued and part rows grew from367 to373."
+  },
+  "integration": {
+    "backend": "actual Worker code + actual native uploader with checksum-enforcing simulated R2",
+    "originalBytes": 83886080,
+    "originalDimensions": [
+      4096,
+      1024
+    ],
+    "resume": "Part6 interrupted after1–5; restart resumes6–10.",
+    "checks": [
+      "SHA checked by gateway storage binding",
+      "Full native readback before signed proof and registration",
+      "Deleted only verified and associated original",
+      "Bad server SHA retains local file and same-file retry recovers",
+      "Corrupt readback forbids registration and local cleanup"
+    ],
+    "liveR2Tested": false,
+    "userWindowsDeviceTested": false
+  },
+  "advisors": {
+    "newPrivateTables": "RLS deny-all, table grants revoked; only guarded private definer functions access them",
+    "unrelatedExistingFindings": [
+      "reference_deletion_backup RLS disabled",
+      "log_artwork_crop_edit executable by public roles",
+      "existing foreign key indexes and category_subtypes policy"
+    ],
+    "remediation": "https://supabase.com/docs/guides/database/database-linter"
+  },
+  "remaining": "User Cloudflare R2 activation/deployment, runtime secret configuration, stable HTTPS endpoint activation, live80MiB test."
+}

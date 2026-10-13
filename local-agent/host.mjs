@@ -19,7 +19,7 @@ process.on('exit',()=>{try{if(JSON.parse(readFileSync(lockPath,'utf8')).pid===pr
 const send=value=>process.stdout.write(frame(value));
 const network=createCloudTransport({origins:[API,STORAGE]});
 process.on('exit',()=>network.close());
-const client=new CaptureClient({fetchImpl:network.fetch,directory:config.directory,stateDirectory,event:state=>send({event:true,state})});await client.load();
+const client=new CaptureClient({fetchImpl:network.fetch,directory:config.directory,stateDirectory,discoverStorageConfig:true,allowStorageOrigin:origin=>network.allowOrigin(origin),event:state=>send({event:true,state})});await client.load();
 const decoder=new Decoder();
 async function handle(message){
  const id=message.id;try{let result;

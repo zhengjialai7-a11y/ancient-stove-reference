@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "art-original-r2",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": true,
+  "preview_urls": false,
+  "r2_buckets": [
+    { "binding": "BUCKET", "bucket_name": "art-originals" }
+  ],
+  "vars": {
+    "ALLOWED_ORIGIN": "https://zhengjialai7-a11y.github.io",
+    "MAX_ORIGINAL_BYTES": "5368709120"
+  }
+}

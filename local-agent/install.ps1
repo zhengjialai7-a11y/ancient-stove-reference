@@ -4,7 +4,7 @@ $PackageRoot = Split-Path -Parent $PSScriptRoot
 $InstallRoot = Join-Path $env:LOCALAPPDATA 'ArtCapture'
 $RuntimeRoot = Join-Path $InstallRoot 'runtime'
 $AgentRoot = Join-Path $InstallRoot 'agent'
-Write-Host 'Art Capture v0.7.4 - Windows local uploader'
+Write-Host 'Art Capture v0.7.6 - Windows local uploader'
 Write-Host 'First update/reload the extension. Then copy its ID from edge://extensions or chrome://extensions.'
 $ExtensionId = (Read-Host 'Paste the extension ID (32 lowercase letters)').Trim()
 if ($ExtensionId -notmatch '^[a-p]{32}$') { throw 'Invalid extension ID.' }
@@ -28,7 +28,7 @@ if (!(Test-Path $NodeExe)) {
  Expand-Archive -LiteralPath $ArchivePath -DestinationPath $RuntimeRoot -Force
  Remove-Item -LiteralPath $ArchivePath
 }
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'core.mjs'),(Join-Path $PSScriptRoot 'host.mjs'),(Join-Path $PSScriptRoot 'network.mjs') -Destination $AgentRoot -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'core.mjs'),(Join-Path $PSScriptRoot 'host.mjs'),(Join-Path $PSScriptRoot 'network.mjs'),(Join-Path $PSScriptRoot 'r2.mjs') -Destination $AgentRoot -Force
 $Directory = Join-Path $env:USERPROFILE 'Downloads'
 $ConfigPath = Join-Path $AgentRoot 'config.json'
 if (Test-Path $ConfigPath) { $OldConfig = Get-Content -LiteralPath $ConfigPath -Encoding UTF8 -Raw | ConvertFrom-Json; if ($OldConfig.directory) { $Directory=$OldConfig.directory } }
@@ -48,4 +48,4 @@ foreach ($BrowserKey in @('Microsoft\Edge','Google\Chrome')) {
 }
 Write-Host 'Installed. Keep the browser open; you can close the workbench during upload.' -ForegroundColor Green
 Write-Host 'Open the collection queue, sign in, then click Check local assistant.'
-Start-Process 'https://zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html?v=0.9.3'
+Start-Process 'https://zhengjialai7-a11y.github.io/ancient-stove-reference/queue.html?v=0.9.7'

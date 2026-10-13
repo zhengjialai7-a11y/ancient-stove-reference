@@ -16,7 +16,7 @@ function setup(){
  const tables={reference_capture_status:[task('existing')],artwork_projects:[],artwork_masters:[],artwork_crops:[],reference_capture_imports:[]};
  const state={error:null,result:{id:'archive',added_count:1,existing_count:1,duplicate_count:1,invalid_count:1,new_task_ids:['new'],reused_archive:false},session:{user:{id:'owner',email:'owner@example.test'}}};
  const db={
-  rpc:async(name,args)=>{rpcCalls.push({name,args});if(!state.error){tables.reference_capture_status.push(task('new','ffffffffffffffffffffff01'));tables.reference_capture_imports=[{id:'archive',file_name:args.p_file_name,item_count:2,added_count:1,existing_count:1,invalid_count:1,duplicate_count:1,new_task_ids:['new'],created_at:'2026-10-11T00:00:00Z'}];}return {data:state.result,error:state.error};},
+  rpc:async(name,args)=>{rpcCalls.push({name,args});if(name==='get_original_storage_config')return {data:{provider:'supabase',enabled:false,endpoint:null},error:state.storageError||null};if(!state.error){tables.reference_capture_status.push(task('new','ffffffffffffffffffffff01'));tables.reference_capture_imports=[{id:'archive',file_name:args.p_file_name,item_count:2,added_count:1,existing_count:1,invalid_count:1,duplicate_count:1,new_task_ids:['new'],created_at:'2026-10-11T00:00:00Z'}];}return {data:state.result,error:state.error};},
   from:table=>{const q={select(columns){reads.push({table,columns});return this;},order(){return this;},range(){return this;},limit(){return this;},eq(){return this;},single:async()=>({data:{payload:{items:[{sourceId:id,sourceType:'SUHA'}],albumId:'saved-album'},file_name:'saved.json'}}),then(resolve,reject){return Promise.resolve({data:tables[table],error:null}).then(resolve,reject);}};return q;},
   channel:()=>({on(){return this;},subscribe(){}}),removeChannel(){},
   auth:{getSession:async()=>({data:{session:state.session}}),onAuthStateChange(){},signOut(){}}
@@ -30,13 +30,13 @@ function setup(){
 test('login loads cloud queue and saved incremental IDs without selecting or reimporting a file',async()=>{
  const s=setup();s.tables.reference_capture_imports=[{id:'previous',file_name:'previous.json',new_task_ids:['existing'],added_count:1,item_count:1,existing_count:0,invalid_count:0,duplicate_count:0,created_at:'2026-10-11T00:00:00Z'}];
  await s.run('refreshAuth()');assert.match(s.$('cloudState').textContent,/云端 1 条收藏.*无需重新提交/);
- assert.equal(s.rpcCalls.length,0);assert.equal(s.run('newIds.has("existing")'),true);
+ assert.equal(s.rpcCalls.filter(x=>x.name==='import_reference_capture_json').length,0);assert.equal(s.run('newIds.has("existing")'),true);assert.match(s.$('originalStorageState').textContent,/R2 待连接/);
  assert.equal(s.reads.some(r=>r.columns.includes('payload')),false);
 });
 test('import sends full JSON to one atomic RPC and filters actual server-reported additions',async()=>{
  const s=setup();await s.run('refreshAuth()');const original={albumId:'keep-metadata',items:[{sourceId:id,sourceType:'SUHA'},{sourceId:'ffffffffffffffffffffff01',sourceType:'SUHA'},{sourceId:id,sourceType:'SUHA'},null]};s.ctx.input=original;
  await s.run('importData(input,"new-collection.json")');
- assert.equal(s.rpcCalls.length,1);assert.equal(s.rpcCalls[0].name,'import_reference_capture_json');assert.equal(s.rpcCalls[0].args.p_payload,original);assert.equal(s.rpcCalls[0].args.p_file_name,'new-collection.json');
+ const calls=s.rpcCalls.filter(x=>x.name==='import_reference_capture_json');assert.equal(calls.length,1);assert.equal(calls[0].args.p_payload,original);assert.equal(calls[0].args.p_file_name,'new-collection.json');
  assert.match(s.$('msg').textContent,/新增 1 条，已存在 1 条，文件内重复 1 条，无效 1 条/);
  assert.equal(s.$('filter').value,'new');assert.equal(s.run('allFiltered().map(r=>r.id).join(",")'),'new');assert.equal(s.$('jsonFile').disabled,false);
  s.$('batch').value='5';s.$('nextBatch').onclick();assert.equal(s.run('[...batchIds].join(",")'),'new');assert.equal(s.$('filter').value,'new');
@@ -45,6 +45,10 @@ test('failed archive RPC leaves local selection intact and allows retry',async()
  const s=setup();await s.run('refreshAuth()');s.state.error={message:'cloud unavailable'};s.ctx.input={items:[{sourceId:id,sourceType:'SUHA'}]};
  await assert.rejects(s.run('importData(input)'),e=>e.message==='cloud unavailable');
  assert.equal(s.run('queue.length'),1);assert.equal(s.run('newIds.size'),0);assert.equal(s.$('jsonFile').disabled,false);assert.equal(s.run('importing'),false);
+});
+test('a storage configuration failure leaves the loaded collection and its progress visible',async()=>{
+ const s=setup();s.state.storageError={message:'temporarily unavailable'};await s.run('refreshAuth()');
+ assert.equal(s.run('queue.length'),1);assert.match(s.$('cloudState').textContent,/已自动加载/);assert.match(s.$('originalStorageState').textContent,/未确认/);assert.equal(s.rpcCalls.some(x=>x.name==='import_reference_capture_json'),false);
 });
 test('archive downloads preserve original collection content and historical additions remain selectable',async()=>{
  const s=setup();await s.run('refreshAuth()');s.ctx.input={items:[{sourceId:id,sourceType:'SUHA'}]};await s.run('importData(input)');
